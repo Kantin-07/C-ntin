@@ -43,7 +43,7 @@
   .fab{position:fixed;bottom:100px;right:16px;width:56px;height:56px;border-radius:50%;background:var(--primary);color:#fff;border:none;font-size:1.7rem;box-shadow:0 6px 22px var(--primary-glow);z-index:40}
   .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;display:none;align-items:flex-end;justify-content:center;backdrop-filter:blur(4px)}
   .modal-bg.show{display:flex}
-  .modal{background:var(--card);width:100%;max-width:480px;border-radius:20px 20px 0 0;padding:20px 16px;max-height:90vh;overflow-y:auto;border-top:1px solid var(--border)}
+  .modal{background:var(--card);width:100%;max-width:480px;border-radius:20px 20px 0 0;padding:20px 16px;max-height:94vh;overflow-y:auto;border-top:1px solid var(--border)}
   .modal h2{font-size:1.15rem;margin-bottom:16px}
   .form-group{margin-bottom:13px}
   .form-group label{display:block;font-size:.8rem;font-weight:600;color:var(--muted);margin-bottom:5px}
@@ -56,10 +56,10 @@
   .toast{position:fixed;bottom:110px;left:50%;transform:translateX(-50%);background:#1e293b;color:#fff;padding:11px 18px;border-radius:12px;font-size:.9rem;z-index:200;opacity:0;transition:.25s;pointer-events:none;border:1px solid var(--border)}
   .toast.show{opacity:1}
   .bottom-bar{position:fixed;bottom:0;left:0;right:0;background:rgba(15,23,42,.95);backdrop-filter:blur(12px);border-top:1px solid var(--border);padding:10px 10px;display:flex;gap:6px;z-index:30;padding-bottom:calc(10px + env(safe-area-inset-bottom))}
-  .bottom-bar button{flex:1;padding:10px 3px;border-radius:11px;border:none;font-weight:600;font-size:.72rem;background:var(--card2);color:var(--text)}
+  .bottom-bar button{flex:1;padding:10px 3px;border-radius:11px;border:none;font-weight:600;font-size:.8rem;background:var(--card2);color:var(--text)}
   .sheet{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:90;display:none;align-items:flex-end;justify-content:center;backdrop-filter:blur(4px)}
   .sheet.show{display:flex}
-  .sheet-content{background:var(--card);width:100%;max-width:480px;border-radius:20px 20px 0 0;max-height:88vh;overflow-y:auto;padding:20px 16px calc(20px + env(safe-area-inset-bottom));border-top:1px solid var(--border)}
+  .sheet-content{background:var(--card);width:100%;max-width:480px;border-radius:16px 16px 0 0;max-height:96vh;height:96vh;overflow-y:auto;padding:20px 16px calc(20px + env(safe-area-inset-bottom));border-top:1px solid var(--border)}
   .sheet-content h2{font-size:1.15rem;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
   .month-header{background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;padding:11px 14px;border-radius:11px;margin:14px 0 8px;font-weight:700;display:flex;justify-content:space-between;cursor:pointer}
   .day-header{font-weight:600;font-size:.85rem;color:var(--muted);margin:10px 0 6px;padding:8px 10px;background:var(--bg);border-radius:10px;border:1px solid var(--border);display:flex;justify-content:space-between;cursor:pointer}
@@ -96,8 +96,11 @@
     <button onclick="openSales()">Satışlar</button>
     <button onclick="openVeresiye()">Veresiye</button>
     <button onclick="openToplam()">Toplam</button>
-    <button onclick="exportExcel()">Excel</button>
-    <button onclick="document.getElementById('excelInput').click()">Yükle</button>
+    <button onclick="toggleDataMenu()" id="dataMenuBtn">♻️</button>
+  </div>
+  <div id="dataMenu" style="display:none;position:fixed;bottom:70px;right:12px;z-index:40;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:8px;box-shadow:0 8px 30px rgba(0,0,0,.4);min-width:150px">
+    <button class="btn btn-secondary btn-block" style="margin-bottom:6px" onclick="exportExcel();hideDataMenu()">Excel İndir</button>
+    <button class="btn btn-secondary btn-block" onclick="document.getElementById('excelInput').click();hideDataMenu()">Excel Yükle</button>
   </div>
   <input type="file" id="excelInput" accept=".csv,text/csv" style="display:none" onchange="importExcel(event)">
 
@@ -204,6 +207,7 @@
       q=(q||'').toLowerCase();
       const list=document.getElementById('list');
       const filtered=products.filter(p=>!q||p.name.toLowerCase().includes(q)||(p.barcode||'').includes(q));
+      filtered.sort((a,b)=>(a.name||'').localeCompare(b.name||'','tr',{sensitivity:'base'}));
       if(!filtered.length){ list.innerHTML=`<div class="empty">${products.length?'Sonuç yok':'Henüz ürün yok'} </div>`; return; }
       list.innerHTML=filtered.map(p=>{
         const sc=p.stock<=0?'stock-zero':p.stock<=5?'stock-low':'stock-ok';
@@ -272,7 +276,7 @@
     function openVeresiyeFromCart(){
       if(!cart.length) return;
       stopLiveScanner();
-      const names=veresiye.map(v=>v.name);
+      const names=veresiye.map(v=>v.name).sort((a,b)=>a.localeCompare(b,'tr',{sensitivity:'base'}));
       document.getElementById('modal').innerHTML=`
         <h2>Veresiye Yaz</h2>
         <div class="form-group"><label>Müşteri Adı</label>
@@ -306,7 +310,7 @@
     }
 
     function openManualVeresiye(){
-      const names = veresiye.map(v=>v.name);
+      const names = veresiye.map(v=>v.name).sort((a,b)=>a.localeCompare(b,'tr',{sensitivity:'base'}));
       document.getElementById('modal').innerHTML = `
         <h2>Elle Borç Girişi</h2>
         <div class="form-group"><label>Müşteri Adı</label>
@@ -342,7 +346,7 @@
       toast('Elle borç eklendi · ' + name + ' · ' + money(amount));
     }
 
-    function openVeresiye(){
+    function openVeresiye(){ hideDataMenu();
       stopLiveScanner();
       renderVeresiye();
       document.getElementById('veresiyeSheet').classList.add('show');
@@ -359,7 +363,8 @@
           <div class="summary-box"><div class="lbl">Kişi</div><div class="val">${veresiye.filter(v=>personBalance(v)>0).length}</div></div>
         </div>`;
       if(!veresiye.length){ html+=`<div class="empty">Veresiye kaydı yok</div>`; el.innerHTML=html; return; }
-      veresiye.forEach((p,pi)=>{
+      const sortedVeresiye = [...veresiye].sort((a,b)=>(a.name||'').localeCompare(b.name||'','tr',{sensitivity:'base'}));
+      sortedVeresiye.forEach((p,pi)=>{
         const bal=personBalance(p);
         const openId='vp_'+p.id;
         const sira = pi + 1;
@@ -450,7 +455,7 @@
     }
 
     // ===== SATIŞLAR =====
-    function openSales(){ stopLiveScanner(); renderSalesSheet(); document.getElementById('salesSheet').classList.add('show'); }
+    function openSales(){ hideDataMenu(); stopLiveScanner(); renderSalesSheet(); document.getElementById('salesSheet').classList.add('show'); }
 
     function renderSalesSheet(){
       const el=document.getElementById('salesContent');
@@ -596,41 +601,62 @@
       const stock=parseInt(document.getElementById('st').value)||0;
       if(editId){ const p=products.find(x=>x.id===editId); p.name=name;p.barcode=barcode;p.price=price;p.stock=stock; }
       else products.push({id:id(),name,barcode,price,stock});
+      products.sort((a,b)=>(a.name||'').localeCompare(b.name||'','tr',{sensitivity:'base'}));
       save(); closeModal(); render(); toast(editId?'Güncellendi':'Eklendi');
     }
     function delProduct(){ if(!confirm('Silinsin mi?')) return; products=products.filter(p=>p.id!==editId); save(); closeModal(); render(); toast('Silindi'); }
     function closeModal(){ document.getElementById('modalBg').classList.remove('show'); if(tab==='sales') startLiveScanner(); }
 
-    function openToplam(){
+    function openToplam(){ hideDataMenu();
       stopLiveScanner();
       const stokDeger = products.reduce((s,p)=>s+(p.price||0)*(p.stock||0),0);
+      const stokAdet = products.reduce((s,p)=>s+(p.stock||0),0);
       const satis = totalSales();
       const veres = totalVeresiye();
       const satisVeresiye = satis + veres;
+      const kisi = veresiye.filter(v=>personBalance(v)>0).length;
       document.getElementById('toplamContent').innerHTML = `
         <h2>Toplam <button class="btn btn-secondary" style="padding:6px 12px" onclick="closeToplam()">Kapat</button></h2>
         <div class="v-card">
           <div class="meta">Satış Toplamı</div>
-          <div style="font-size:1.3rem;font-weight:700;color:#4ade80;margin-top:4px">${money(satis)}</div>
+          <div style="font-size:1.35rem;font-weight:700;color:#4ade80;margin-top:4px">${money(satis)}</div>
+          <div class="meta" style="margin-top:4px">${salesHistory.length} satış kaydı</div>
         </div>
         <div class="v-card">
           <div class="meta">Veresiye Bakiye</div>
-          <div style="font-size:1.3rem;font-weight:700;color:#fbbf24;margin-top:4px">${money(veres)}</div>
+          <div style="font-size:1.35rem;font-weight:700;color:#fbbf24;margin-top:4px">${money(veres)}</div>
+          <div class="meta" style="margin-top:4px">${kisi} kişide açık borç</div>
         </div>
         <div class="v-card">
           <div class="meta">Satış + Veresiye</div>
-          <div style="font-size:1.3rem;font-weight:700;color:#60a5fa;margin-top:4px">${money(satisVeresiye)}</div>
+          <div style="font-size:1.35rem;font-weight:700;color:#60a5fa;margin-top:4px">${money(satisVeresiye)}</div>
         </div>
         <div class="v-card">
           <div class="meta">Stok Fiyat Toplamı</div>
-          <div style="font-size:1.3rem;font-weight:700;color:#a78bfa;margin-top:4px">${money(stokDeger)}</div>
+          <div style="font-size:1.35rem;font-weight:700;color:#a78bfa;margin-top:4px">${money(stokDeger)}</div>
+          <div class="meta" style="margin-top:4px">${products.length} ürün · ${stokAdet} adet</div>
         </div>
-        <div style="margin-top:8px;font-size:.8rem;color:var(--muted);text-align:center">Satış: nakit/tahsilat · Veresiye: ödenmemiş borç</div>`;
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+          <div class="meta" style="text-align:center">Özet</div>
+          <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:.9rem"><span>Satış</span><strong style="color:#4ade80">${money(satis)}</strong></div>
+          <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:.9rem"><span>Veresiye</span><strong style="color:#fbbf24">${money(veres)}</strong></div>
+          <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:.9rem"><span>Stok</span><strong style="color:#a78bfa">${money(stokDeger)}</strong></div>
+          <div style="display:flex;justify-content:space-between;margin-top:10px;font-size:1.05rem;padding-top:8px;border-top:1px solid var(--border)"><span>Genel Toplam (S+V)</span><strong style="color:#60a5fa">${money(satisVeresiye)}</strong></div>
+        </div>`;
       document.getElementById('toplamSheet').classList.add('show');
     }
     function closeToplam(){
       document.getElementById('toplamSheet').classList.remove('show');
       if(tab==='sales') startLiveScanner();
+    }
+
+    function toggleDataMenu(){
+      const m = document.getElementById('dataMenu');
+      m.style.display = m.style.display === 'none' ? 'block' : 'none';
+    }
+    function hideDataMenu(){
+      const m = document.getElementById('dataMenu');
+      if(m) m.style.display = 'none';
     }
 
     function exportExcel(){
@@ -654,7 +680,7 @@
           if(existing){existing.name=name;existing.price=price;existing.stock=stock;}
           else products.push({id:id(),name,barcode,price,stock}); added++;
         }
-        save(); render(); toast(added+' ürün yüklendi');
+        products.sort((a,b)=>(a.name||'').localeCompare(b.name||'','tr',{sensitivity:'base'})); save(); render(); toast(added+' ürün yüklendi');
       };
       reader.readAsText(file); e.target.value='';
     }
