@@ -118,7 +118,7 @@
     <button class="btn btn-secondary btn-block" style="margin-bottom:6px" onclick="exportExcel();hideDataMenu()">Excel İndir</button>
     <button class="btn btn-secondary btn-block" onclick="document.getElementById('excelInput').click();hideDataMenu()">Excel Yükle</button>
   </div>
-  <input type="file" id="excelInput" accept=".csv,text/csv" style="display:none" onchange="importExcel(event)">
+  <input type="file" id="excelInput" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="display:none" onchange="importExcel(event)">
 
   <div class="modal-bg" id="modalBg"><div class="modal" id="modal"></div></div>
   <div class="sheet" id="salesSheet"><div class="sheet-content" id="salesContent"></div></div>
@@ -130,6 +130,7 @@
   <div class="toast" id="toast"></div>
 
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <script>
     let products = JSON.parse(localStorage.getItem('bf_stok') || '[]');
     let salesHistory = JSON.parse(localStorage.getItem('bf_sales') || '[]');
@@ -815,29 +816,174 @@
     }
 
     function exportExcel(){
-      if(!products.length){toast('Ürün yok');return;}
-      let csv='Barkod,Ürün Adı,Fiyat,Stok\n';
-      products.forEach(p=>{csv+=`"${p.barcode||''}","${(p.name||'').replace(/"/g,'""')}",${p.price||0},${p.stock||0}\n`;});
-      const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'});
-      const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='urunler-'+new Date().toISOString().slice(0,10)+'.csv'; a.click(); URL.revokeObjectURL(url); toast('Excel indirildi');
+      if(typeof XLSX === 'undefined'){
+        // Yedek: CSV
+        let csv='Barkod,Ürün Adı,Fiyat,Stok\n';
+        products.forEach(p=>{csv+=`"${p.barcode||''}","${(p.name||'').replace(/"/g,'""')}",${p.price||0},${p.stock||0}\n`;});
+        const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'});
+        const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url;
+        a.download='kantin-'+new Date().toISOString().slice(0,10)+'.csv'; a.click(); URL.revokeObjectURL(url);
+        toast('CSV indirildi'); return;
+      }
+      const wb = XLSX.utils.book_new();
+
+      // 1) ÜRÜNLER
+      const urunRows = [['Barkod','Ürün Adı','Fiyat (₺)','Stok','Stok Değeri (₺)']];
+      products.forEach(p=>{
+        const fiyat=Number(p.price)||0, stok=Number(p.stock)||0;
+        urunRows.push([p.barcode||'', p.name||'', fiyat, stok, Math.round(fiyat*stok*100)/100]);
+      });
+      const wsUrun = XLSX.utils.aoa_to_sheet(urunRows);
+      wsUrun['!cols'] = [{wch:16},{wch:28},{wch:12},{wch:10},{wch:14}];
+      XLSX.utils.book_append_sheet(wb, wsUrun, 'Ürünler');
+
+      // 2) SATIŞLAR (fiş özeti)
+      const satisRows = [['Tarih','Saat','Toplam (₺)','Ürün Sayısı','Kaynak','Müşteri']];
+      salesHistory.forEach(s=>{
+        const d=new Date(s.date);
+        const tarih=d.toLocaleDateString('tr-TR');
+        const saat=d.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});
+        const kaynak=s.fromVeresiye?'Veresiye Tahsilat':'Nakit Satış';
+        satisRows.push([tarih, saat, Number(s.total)||0, (s.items||[]).length, kaynak, s.person||'']);
+      });
+      const wsSatis = XLSX.utils.aoa_to_sheet(satisRows);
+      wsSatis['!cols'] = [{wch:14},{wch:8},{wch:12},{wch:12},{wch:16},{wch:18}];
+      XLSX.utils.book_append_sheet(wb, wsSatis, 'Satışlar');
+
+      // 3) SATIŞ KALEMLERİ
+      const kalemRows = [['Tarih','Saat','Ürün','Adet','Birim Fiyat (₺)','Satır Tutarı (₺)','Kaynak','Müşteri']];
+      salesHistory.forEach(s=>{
+        const d=new Date(s.date);
+        const tarih=d.toLocaleDateString('tr-TR');
+        const saat=d.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});
+        const kaynak=s.fromVeresiye?'Veresiye Tahsilat':'Nakit Satış';
+        (s.items||[]).forEach(it=>{
+          const adet=Number(it.qty)||0, fiyat=Number(it.price)||0;
+          kalemRows.push([tarih, saat, it.name||'', adet, fiyat, Math.round(adet*fiyat*100)/100, kaynak, s.person||'']);
+        });
+      });
+      const wsKalem = XLSX.utils.aoa_to_sheet(kalemRows);
+      wsKalem['!cols'] = [{wch:14},{wch:8},{wch:24},{wch:8},{wch:14},{wch:14},{wch:16},{wch:18}];
+      XLSX.utils.book_append_sheet(wb, wsKalem, 'Satış Kalemleri');
+
+      // 4) VERESİYE (kişi özeti)
+      const verRows = [['Sıra','Müşteri','Açık Bakiye (₺)','Kayıt Sayısı','Ödenmemiş','Ödenmiş']];
+      const sortedV=[...veresiye].sort((a,b)=>(a.name||'').localeCompare(b.name||'','tr',{sensitivity:'base'}));
+      sortedV.forEach((p,i)=>{
+        const entries=p.entries||[];
+        const acik=entries.filter(e=>!e.paid).reduce((s,e)=>s+(Number(e.total)||0),0);
+        const odenmemis=entries.filter(e=>!e.paid).length;
+        const odenmis=entries.filter(e=>e.paid).length;
+        verRows.push([i+1, p.name||'', Math.round(acik*100)/100, entries.length, odenmemis, odenmis]);
+      });
+      const wsVer = XLSX.utils.aoa_to_sheet(verRows);
+      wsVer['!cols'] = [{wch:6},{wch:22},{wch:14},{wch:12},{wch:12},{wch:10}];
+      XLSX.utils.book_append_sheet(wb, wsVer, 'Veresiye');
+
+      // 5) VERESİYE KALEMLERİ
+      const verKalem = [['Müşteri','Tarih','Saat','Durum','Toplam (₺)','Ürün / Açıklama','Adet','Birim Fiyat (₺)','Satır Tutarı (₺)','Elle Giriş']];
+      sortedV.forEach(p=>{
+        (p.entries||[]).forEach(e=>{
+          const d=new Date(e.date);
+          const tarih=d.toLocaleDateString('tr-TR');
+          const saat=d.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});
+          const durum=e.paid?'Ödendi':'Açık';
+          const items=e.items||[{name:'—',qty:1,price:e.total}];
+          items.forEach(it=>{
+            const adet=Number(it.qty)||0, fiyat=Number(it.price)||0;
+            verKalem.push([p.name||'', tarih, saat, durum, Number(e.total)||0, it.name||'', adet, fiyat, Math.round(adet*fiyat*100)/100, e.manual?'Evet':'Hayır']);
+          });
+        });
+      });
+      const wsVK = XLSX.utils.aoa_to_sheet(verKalem);
+      wsVK['!cols'] = [{wch:18},{wch:14},{wch:8},{wch:10},{wch:12},{wch:24},{wch:8},{wch:14},{wch:14},{wch:10}];
+      XLSX.utils.book_append_sheet(wb, wsVK, 'Veresiye Kalemleri');
+
+      // 6) ÖZET
+      const stokDeger=products.reduce((s,p)=>s+(Number(p.price)||0)*(Number(p.stock)||0),0);
+      const stokAdet=products.reduce((s,p)=>s+(Number(p.stock)||0),0);
+      const satis=totalSales();
+      const veres=totalVeresiye();
+      const ozet = [
+        ['KANTİN — Özet Rapor'],
+        ['Tarih', new Date().toLocaleString('tr-TR')],
+        [],
+        ['Bölüm','Tutar / Değer'],
+        ['Satış Toplamı (₺)', Math.round(satis*100)/100],
+        ['Veresiye Açık Bakiye (₺)', Math.round(veres*100)/100],
+        ['Satış + Veresiye (₺)', Math.round((satis+veres)*100)/100],
+        ['Stok Fiyat Toplamı (₺)', Math.round(stokDeger*100)/100],
+        [],
+        ['Ürün Çeşidi', products.length],
+        ['Toplam Stok Adedi', stokAdet],
+        ['Satış Kaydı', salesHistory.length],
+        ['Veresiye Kişisi', veresiye.length],
+        ['Açık Borçlu Kişi', veresiye.filter(v=>personBalance(v)>0).length]
+      ];
+      const wsOzet = XLSX.utils.aoa_to_sheet(ozet);
+      wsOzet['!cols'] = [{wch:28},{wch:18}];
+      XLSX.utils.book_append_sheet(wb, wsOzet, 'Özet');
+
+      const fname = 'kantin-'+new Date().toISOString().slice(0,10)+'.xlsx';
+      XLSX.writeFile(wb, fname);
+      toast('Excel indirildi · 6 sayfa');
     }
     function importExcel(e){
       const file=e.target.files[0]; if(!file) return;
+      const name=(file.name||'').toLowerCase();
       const reader=new FileReader();
       reader.onload=ev=>{
-        const lines=ev.target.result.split(/\r?\n/).filter(l=>l.trim()); let added=0;
-        for(let i=1;i<lines.length;i++){
-          const cols=lines[i].match(/(".*?"|[^,]+)/g)||[]; if(cols.length<2) continue;
-          const barcode=(cols[0]||'').replace(/^"|"$/g,'').trim();
-          const name=(cols[1]||'').replace(/^"|"$/g,'').trim();
-          const price=parseFloat(cols[2])||0; const stock=parseInt(cols[3])||0; if(!name) continue;
-          let existing=products.find(p=>p.barcode&&p.barcode===barcode);
-          if(existing){existing.name=name;existing.price=price;existing.stock=stock;}
-          else products.push({id:id(),name,barcode,price,stock}); added++;
-        }
-        products.sort((a,b)=>(a.name||'').localeCompare(b.name||'','tr',{sensitivity:'base'})); save(); render(); toast(added+' ürün yüklendi');
+        try{
+          let rows=[];
+          if(name.endsWith('.xlsx')||name.endsWith('.xls')||(typeof XLSX!=='undefined' && ev.target.result instanceof ArrayBuffer)){
+            if(typeof XLSX==='undefined'){ toast('Excel kütüphanesi yüklenemedi'); return; }
+            const data=new Uint8Array(ev.target.result);
+            const wb=XLSX.read(data,{type:'array'});
+            // Ürünler sayfasını tercih et, yoksa ilk sayfa
+            const sheetName = wb.SheetNames.find(n=>/ürün|urun|product/i.test(n)) || wb.SheetNames[0];
+            rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {header:1, defval:''});
+          } else {
+            const text=ev.target.result;
+            rows=text.split(/\r?\n/).filter(l=>l.trim()).map(line=>{
+              const cols=line.match(/(".*?"|[^,;]+)/g)||[];
+              return cols.map(c=>String(c).replace(/^"|"$/g,'').trim());
+            });
+          }
+          if(!rows.length){ toast('Dosya boş'); return; }
+          // Başlık satırını atla
+          let start=0;
+          const h=(rows[0]||[]).map(x=>String(x).toLowerCase()).join(' ');
+          if(/barkod|ürün|urun|ad|fiyat|stok|name|price/.test(h)) start=1;
+          let added=0;
+          for(let i=start;i<rows.length;i++){
+            const cols=rows[i]; if(!cols||cols.length<2) continue;
+            // Esnek kolon: Barkod, Ad, Fiyat, Stok
+            let barcode='', pname='', price=0, stock=0;
+            if(cols.length>=4){
+              barcode=String(cols[0]||'').trim();
+              pname=String(cols[1]||'').trim();
+              price=parseFloat(String(cols[2]).replace(',','.'))||0;
+              stock=parseInt(cols[3])||0;
+            } else {
+              pname=String(cols[0]||'').trim();
+              price=parseFloat(String(cols[1]).replace(',','.'))||0;
+              stock=parseInt(cols[2])||0;
+            }
+            if(!pname) continue;
+            let existing=null;
+            if(barcode) existing=products.find(p=>p.barcode&&p.barcode===barcode);
+            if(!existing) existing=products.find(p=>p.name&&p.name.toLowerCase()===pname.toLowerCase());
+            if(existing){ existing.name=pname; if(barcode) existing.barcode=barcode; existing.price=price; existing.stock=stock; }
+            else products.push({id:id(), name:pname, barcode, price, stock});
+            added++;
+          }
+          products.sort((a,b)=>(a.name||'').localeCompare(b.name||'','tr',{sensitivity:'base'}));
+          save(); render(); toast(added+' ürün yüklendi');
+        }catch(err){ console.error(err); toast('Dosya okunamadı'); }
       };
-      reader.readAsText(file); e.target.value='';
+      if(name.endsWith('.xlsx')||name.endsWith('.xls')) reader.readAsArrayBuffer(file);
+      else reader.readAsText(file);
+      e.target.value='';
     }
 
     document.querySelector('.tabs').onclick=e=>{
