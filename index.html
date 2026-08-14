@@ -115,8 +115,8 @@
     <button onclick="toggleDataMenu()" id="dataMenuBtn">♻️</button>
   </div>
   <div id="dataMenu" style="display:none;position:fixed;bottom:120px;right:16px;z-index:40;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:8px;box-shadow:0 8px 30px rgba(0,0,0,.4);min-width:150px">
-    <button class="btn btn-secondary btn-block" style="margin-bottom:6px" onclick="exportExcel();hideDataMenu()">Excel İndir</button>
-    <button class="btn btn-secondary btn-block" onclick="document.getElementById('excelInput').click();hideDataMenu()">Excel Yükle</button>
+    <button class="btn btn-secondary btn-block" style="margin-bottom:6px" onclick="exportExcel();hideDataMenu()">Excel İndir (6 sayfa)</button>
+    <button class="btn btn-secondary btn-block" onclick="document.getElementById('excelInput').click();hideDataMenu()">Excel / CSV Yükle</button>
   </div>
   <input type="file" id="excelInput" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="display:none" onchange="importExcel(event)">
 
@@ -135,6 +135,7 @@
     let products = JSON.parse(localStorage.getItem('bf_stok') || '[]');
     let salesHistory = JSON.parse(localStorage.getItem('bf_sales') || '[]');
     let veresiye = JSON.parse(localStorage.getItem('bf_veresiye') || '[]'); // {id, name, entries:[{id,date,total,items,paid}], deleted?}
+    // isimler birleştirilecek init'te
     let cart = [];
     let tab = 'sales';
     let liveScanner = null;
@@ -146,7 +147,33 @@
 
     function save(){ localStorage.setItem('bf_stok', JSON.stringify(products)); }
     function saveSales(){ localStorage.setItem('bf_sales', JSON.stringify(salesHistory)); }
-    function saveVeresiye(){ localStorage.setItem('bf_veresiye', JSON.stringify(veresiye)); }
+    function saveVeresiye(){ mergeVeresiyeNames(); localStorage.setItem('bf_veresiye', JSON.stringify(veresiye)); }
+    function normName(n){ return String(n||'').trim().replace(/\s+/g,' '); }
+    function mergeVeresiyeNames(){
+      const map = {};
+      const order = [];
+      veresiye.forEach(p=>{
+        const key = normName(p.name).toLocaleLowerCase('tr');
+        if(!key) return;
+        if(!map[key]){
+          map[key] = { id: p.id, name: normName(p.name), entries: [] };
+          order.push(key);
+        }
+        const entries = Array.isArray(p.entries) ? p.entries : [];
+        map[key].entries = map[key].entries.concat(entries);
+      });
+      // Aynı entry id tekrarını temizle, tarihe göre sırala
+      order.forEach(key=>{
+        const seen = {};
+        map[key].entries = map[key].entries.filter(e=>{
+          if(!e || !e.id) return true;
+          if(seen[e.id]) return false;
+          seen[e.id] = true;
+          return true;
+        }).sort((a,b)=> new Date(b.date) - new Date(a.date));
+      });
+      veresiye = order.map(k=>map[k]);
+    }
     function money(n){ return Number(n||0).toFixed(2).replace('.',',') + ' ₺'; }
     function openPhoto(){ const el=document.getElementById('photoLightbox'); if(el){ el.style.display='flex'; } }
     function closePhoto(){ const el=document.getElementById('photoLightbox'); if(el){ el.style.display='none'; } }
@@ -360,11 +387,12 @@
     }
 
     function confirmVeresiye(){
-      const name=(document.getElementById('vName').value||'').trim();
+      const name=normName(document.getElementById('vName').value||'');
       if(!name){ toast('Müşteri adı gerekli'); return; }
       const total=cart.reduce((s,i)=>s+i.price*i.qty,0);
       const entry={id:id(),date:new Date().toISOString(),total,items:cart.map(i=>({name:i.name,qty:i.qty,price:i.price})),paid:false};
-      let person=veresiye.find(v=>v.name.toLowerCase()===name.toLowerCase());
+      mergeVeresiyeNames();
+      let person=veresiye.find(v=>normName(v.name).toLocaleLowerCase('tr')===name.toLocaleLowerCase('tr'));
       if(!person){ person={id:id(),name,entries:[]}; veresiye.unshift(person); }
       person.entries.unshift(entry);
       saveVeresiye();
@@ -396,14 +424,15 @@
     }
 
     function confirmManualVeresiye(){
-      const name = (document.getElementById('mvName').value||'').trim();
+      const name = normName(document.getElementById('mvName').value||'');
       const amount = parseFloat(document.getElementById('mvAmount').value)||0;
       const note = (document.getElementById('mvNote').value||'').trim();
       if(!name){ toast('Müşteri adı gerekli'); return; }
       if(amount <= 0){ toast('Geçerli tutar girin'); return; }
       const items = note ? [{name: note, qty: 1, price: amount}] : [{name: 'Elle giriş', qty: 1, price: amount}];
       const entry = {id: id(), date: new Date().toISOString(), total: amount, items, paid: false, manual: true};
-      let person = veresiye.find(v => v.name.toLowerCase() === name.toLowerCase());
+      mergeVeresiyeNames();
+      let person = veresiye.find(v => normName(v.name).toLocaleLowerCase('tr') === name.toLocaleLowerCase('tr'));
       if(!person){ person = {id: id(), name, entries: []}; veresiye.unshift(person); }
       person.entries.unshift(entry);
       saveVeresiye();
@@ -994,6 +1023,7 @@
     document.getElementById('toplamSheet').onclick=e=>{if(e.target.id==='toplamSheet') closeToplam();};
     document.getElementById('modalBg').onclick=e=>{if(e.target.id==='modalBg') closeModal();};
     window.addEventListener('beforeunload', stopLiveScanner);
+    try{ mergeVeresiyeNames(); saveVeresiye(); }catch(e){}
     render();
   </script>
 </body>
