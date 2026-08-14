@@ -620,9 +620,13 @@
     }
     function manualSales(){ const code=prompt('Barkodu girin:'); if(code) onBarcodeDetected(code.trim()); }
     function addCart(p){
-      if(p.stock<=0){ toast('Stokta yok'); return; }
+      if(p.stock<=0){
+        toast('Stok bitmiş · Stok girişi için açılıyor');
+        openModal(p.id);
+        return;
+      }
       const ex=cart.find(c=>c.id===p.id);
-      if(ex){ if(ex.qty>=p.stock){toast('Stok yetersiz');return;} ex.qty++; }
+      if(ex){ if(ex.qty>=p.stock){toast('Stok yetersiz · Stok güncelle'); openModal(p.id); return;} ex.qty++; }
       else cart.push({id:p.id,name:p.name,price:p.price,qty:1});
       updateCartUI(); toast(p.name+' eklendi');
     }
@@ -654,49 +658,53 @@
 
     let productScanner = null;
     function scanBarcodeForProduct(){
-      const area = document.getElementById('productScanArea');
-      if(!area) return;
-      area.style.display = 'block';
       if(typeof Html5Qrcode === 'undefined'){ toast('Kamera kütüphanesi yok'); return; }
-      stopProductScan();
-      try{
+      // Satış kamerasını bırak (tek kamera)
+      stopLiveScanner();
+      // Eski ürün tarayıcısını temizle
+      if(productScanner){
+        try{ productScanner.stop().catch(()=>{}); }catch(e){}
+        productScanner = null;
+      }
+      const area = document.getElementById('productScanArea');
+      const box = document.getElementById('productScanner');
+      if(!area || !box){ toast('Tarama alanı yok'); return; }
+      box.innerHTML = '';
+      area.style.display = 'block';
+
+      const onCode = (code) => {
+        const b = document.getElementById('b');
+        if(b) b.value = code;
+        stopProductScan();
+        beep();
+        toast('Barkod alındı');
+      };
+      const cfg = { fps: 15, qrbox: { width: 250, height: 120 } };
+
+      const startWith = (cam) => {
         productScanner = new Html5Qrcode('productScanner', { verbose: false });
-        productScanner.start(
-          { facingMode: 'environment' },
-          { fps: 15, qrbox: { width: 250, height: 120 } },
-          (code) => {
-            const b = document.getElementById('b');
-            if(b) b.value = code;
-            stopProductScan();
-            beep();
-            toast('Barkod alındı');
-          },
-          ()=>{}
-        ).catch(()=>{
-          Html5Qrcode.getCameras().then(cams=>{
-            if(!cams || !cams.length){ toast('Kamera açılamadı'); return; }
-            let cid = cams[cams.length-1].id;
-            const back = cams.find(c => /back|arka|rear|environment/i.test(c.label||''));
-            if(back) cid = back.id;
-            productScanner = new Html5Qrcode('productScanner', { verbose: false });
-            productScanner.start(cid, { fps: 15, qrbox: { width: 250, height: 120 } }, (code)=>{
-              const b = document.getElementById('b');
-              if(b) b.value = code;
-              stopProductScan();
-              beep();
-              toast('Barkod alındı');
-            }, ()=>{}).catch(()=> toast('Kamera izni gerekli'));
-          }).catch(()=> toast('Kamera açılamadı'));
-        });
-      }catch(e){ toast('Kamera hatası'); }
+        return productScanner.start(cam, cfg, onCode, ()=>{});
+      };
+
+      startWith({ facingMode: 'environment' }).catch(()=>{
+        Html5Qrcode.getCameras().then(cams=>{
+          if(!cams || !cams.length){ toast('Kamera bulunamadı'); return; }
+          let cid = cams[cams.length-1].id;
+          const back = cams.find(c => /back|arka|rear|environment/i.test(c.label||''));
+          if(back) cid = back.id;
+          startWith(cid).catch(()=> toast('Kamera izni gerekli · Ayarlardan izin verin'));
+        }).catch(()=> toast('Kamera açılamadı'));
+      });
     }
     function stopProductScan(){
       const area = document.getElementById('productScanArea');
       if(area) area.style.display = 'none';
       if(productScanner){
-        productScanner.stop().catch(()=>{});
+        try{ productScanner.stop().catch(()=>{}); }catch(e){}
         productScanner = null;
       }
+      const box = document.getElementById('productScanner');
+      if(box) box.innerHTML = '';
     }
     function saveProduct(){
       const name=document.getElementById('n').value.trim(); if(!name){toast('Ürün adı gerekli');return;}
