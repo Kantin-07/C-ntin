@@ -112,7 +112,7 @@
     <button onclick="openSales()">Satışlar</button>
     <button onclick="openVeresiye()">Veresiye</button>
     <button onclick="openToplam()">Toplam</button>
-    <button onclick="toggleDataMenu()" id="dataMenuBtn" style="color:#facc15">♻️</button>
+    <button onclick="toggleDataMenu()" id="dataMenuBtn" style="color:#facc15 !important;font-size:1.7rem !important;font-weight:800;line-height:1;padding:4px 2px">♻️</button>
   </div>
   <div id="dataMenu" style="display:none;position:fixed;bottom:120px;right:16px;z-index:40;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:8px;box-shadow:0 8px 30px rgba(0,0,0,.4);min-width:150px">
     <button class="btn btn-secondary btn-block" style="margin-bottom:6px" onclick="exportExcel();hideDataMenu()">Excel İndir (6 sayfa)</button>
@@ -733,10 +733,10 @@
       const wrap=document.querySelector('.scanner-wrap');
       if(location.protocol==='file:'){ if(st) st.textContent='HTTPS gerekli'; return; }
       if(typeof Html5Qrcode==='undefined'){ if(st) st.textContent='Kütüphane yükleniyor...'; setTimeout(startLiveScanner,500); return; }
-      if(liveScanner){ try{liveScanner.stop().catch(()=>{});}catch(e){} liveScanner=null; }
+      stopLiveScanner();
       const oldBtn=document.getElementById('camStartBtn'); if(oldBtn) oldBtn.remove();
-      const config={fps:20,qrbox:(w,h)=>({width:Math.floor(w*0.9),height:Math.floor(Math.min(h*0.3,140))}),aspectRatio:1.333};
-      const onSuccess=(code)=>{ const now=Date.now(); if(code===lastCode&&now-lastScanTime<1100) return; lastCode=code; lastScanTime=now; onBarcodeDetected(code); };
+      const config={fps:30,qrbox:(w,h)=>({width:Math.floor(w*0.92),height:Math.floor(Math.min(h*0.38,170))}),aspectRatio:1.333};
+      const onSuccess=(code)=>{ const now=Date.now(); if(code===lastCode&&now-lastScanTime<650) return; lastCode=code; lastScanTime=now; onBarcodeDetected(code); };
       const onReady=()=>{ if(st){st.textContent='Hazır · Barkodu tut'; st.classList.add('active');} const b=document.getElementById('camStartBtn'); if(b)b.remove();
         setTimeout(()=>{document.querySelectorAll('#liveScanner div').forEach(d=>{try{if(d.style)d.style.border='none';}catch(e){}});},400); };
       const showCamButton=(msg)=>{ if(st) st.textContent=msg||'Kamera izni gerekli'; if(document.getElementById('camStartBtn')) return;
@@ -760,7 +760,28 @@
       };
       requestCamera();
     }
-    function stopLiveScanner(){ if(liveScanner){ liveScanner.stop().catch(()=>{}); liveScanner=null; } }
+    function stopLiveScanner(){
+      if(!liveScanner) return;
+      const sc = liveScanner;
+      liveScanner = null;
+      try {
+        if (typeof sc.getState === 'function') {
+          const state = sc.getState();
+          // 2=SCANNING, 3=PAUSED
+          if (state === 2 || state === 3) {
+            sc.stop().catch(()=>{}).finally(()=>{
+              const el = document.getElementById('liveScanner');
+              if(el) el.innerHTML = '';
+            });
+            return;
+          }
+        } else {
+          sc.stop().catch(()=>{});
+        }
+      } catch(e) {}
+      const el = document.getElementById('liveScanner');
+      if(el) el.innerHTML = '';
+    }
 
     function onBarcodeDetected(code){
       beep();
@@ -814,8 +835,16 @@
       stopLiveScanner();
       // Eski ürün tarayıcısını temizle
       if(productScanner){
-        try{ productScanner.stop().catch(()=>{}); }catch(e){}
+        const sc = productScanner;
         productScanner = null;
+        try {
+          if (typeof sc.getState === 'function') {
+            const state = sc.getState();
+            if (state === 2 || state === 3) sc.stop().catch(()=>{});
+          } else {
+            sc.stop().catch(()=>{});
+          }
+        } catch(e) {}
       }
       const area = document.getElementById('productScanArea');
       const box = document.getElementById('productScanner');
@@ -835,8 +864,8 @@
         toast('Barkod alındı');
       };
       const cfg = {
-        fps: 15,
-        qrbox: { width: 250, height: 120 },
+        fps: 28,
+        qrbox: { width: 280, height: 140 },
         aspectRatio: 1.333,
         videoConstraints: { facingMode: 'environment' }
       };
@@ -872,8 +901,18 @@
       const area = document.getElementById('productScanArea');
       if(area) area.style.display = 'none';
       if(productScanner){
-        try{ productScanner.stop().catch(()=>{}); }catch(e){}
+        const sc = productScanner;
         productScanner = null;
+        try {
+          if (typeof sc.getState === 'function') {
+            const state = sc.getState();
+            if (state === 2 || state === 3) {
+              sc.stop().catch(()=>{});
+            }
+          } else {
+            sc.stop().catch(()=>{});
+          }
+        } catch(e) {}
       }
       const box = document.getElementById('productScanner');
       if(box) box.innerHTML = '';
@@ -927,6 +966,11 @@
           <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:.9rem"><span>Veresiye</span><strong style="color:#fbbf24">${money(veres)}</strong></div>
           <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:.9rem"><span>Stok</span><strong style="color:#a78bfa">${money(stokDeger)}</strong></div>
           <div style="display:flex;justify-content:space-between;margin-top:10px;font-size:1.05rem;padding-top:8px;border-top:1px solid var(--border)"><span>Genel Toplam (S+V)</span><strong style="color:#60a5fa">${money(satisVeresiye)}</strong></div>
+        </div>
+        <div style="margin-top:18px;padding:18px 16px;background:linear-gradient(135deg,#1e3a5f 0%,#0f172a 100%);border-radius:16px;text-align:center;border:1px solid rgba(59,130,246,.45);box-shadow:0 4px 20px rgba(59,130,246,.15)">
+          <div style="font-size:.78rem;color:#93c5fd;letter-spacing:1.2px;font-weight:600">TÜM TOPLAMLAR</div>
+          <div style="font-size:1.9rem;font-weight:800;color:#fff;margin-top:8px;letter-spacing:-0.5px">${money(satis + veres + stokDeger)}</div>
+          <div style="font-size:.72rem;color:#64748b;margin-top:6px">Satış + Veresiye + Stok Değeri</div>
         </div>`;
       document.getElementById('toplamSheet').classList.add('show');
       enableSwipeClose('toplamSheet','toplamContent',closeToplam);
