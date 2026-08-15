@@ -736,7 +736,7 @@
       stopLiveScanner();
       const oldBtn=document.getElementById('camStartBtn'); if(oldBtn) oldBtn.remove();
       const config={fps:30,qrbox:(w,h)=>({width:Math.floor(w*0.92),height:Math.floor(Math.min(h*0.38,170))}),aspectRatio:1.333};
-      const onSuccess=(code)=>{ const now=Date.now(); if(code===lastCode&&now-lastScanTime<650) return; lastCode=code; lastScanTime=now; onBarcodeDetected(code); };
+      const onSuccess=(code)=>{ const now=Date.now(); if(code===lastCode&&now-lastScanTime<2200) return; lastCode=code; lastScanTime=now; onBarcodeDetected(code); };
       const onReady=()=>{ if(st){st.textContent='Hazır · Barkodu tut'; st.classList.add('active');} const b=document.getElementById('camStartBtn'); if(b)b.remove();
         setTimeout(()=>{document.querySelectorAll('#liveScanner div').forEach(d=>{try{if(d.style)d.style.border='none';}catch(e){}});},400); };
       const showCamButton=(msg)=>{ if(st) st.textContent=msg||'Kamera izni gerekli'; if(document.getElementById('camStartBtn')) return;
@@ -784,10 +784,25 @@
     }
 
     function onBarcodeDetected(code){
+      // Kamerayı hemen durdur — aynı barkodun tekrar okunmasını engeller
+      stopLiveScanner();
       beep();
-      let p=products.find(x=>x.barcode===code);
-      if(!p){ if(confirm(`"${code}" kayıtlı değil.\nYeni ürün ekle?`)){ openModal(); setTimeout(()=>{const b=document.getElementById('b');if(b)b.value=code;},150);} return; }
+      lastCode = code;
+      lastScanTime = Date.now();
+      let p = products.find(x => x.barcode === code);
+      if(!p){
+        if(confirm(`"${code}" kayıtlı değil.\nYeni ürün ekle?`)){
+          openModal();
+          setTimeout(()=>{ const b=document.getElementById('b'); if(b) b.value=code; }, 150);
+        } else {
+          // Vazgeç — kısa bekleme sonrası kamerayı tekrar aç
+          setTimeout(()=>{ if(tab==='sales') startLiveScanner(); }, 700);
+        }
+        return;
+      }
       addCart(p);
+      // Ürün eklendi, kısa süre sonra kamerayı tekrar aç (aynı barkod kilitli)
+      setTimeout(()=>{ if(tab==='sales') startLiveScanner(); }, 600);
     }
     function manualSales(){ const code=prompt('Barkodu girin:'); if(code) onBarcodeDetected(code.trim()); }
     function addCart(p){
