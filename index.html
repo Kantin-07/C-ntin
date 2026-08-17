@@ -78,6 +78,11 @@
   .scanner-status{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.7);color:#fff;font-size:.78rem;padding:5px 12px;border-radius:20px;z-index:6;white-space:nowrap}
   .scanner-status.active{background:rgba(34,197,94,.85)}
   .v-card{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:8px}
+  .v-swipe-wrap{position:relative;margin-bottom:8px;border-radius:12px;overflow:hidden;background:#991b1b;touch-action:pan-y}
+  .v-swipe-actions{position:absolute;right:0;top:0;bottom:0;width:96px;display:flex;z-index:1}
+  .v-swipe-del{width:100%;border:none;background:#dc2626;color:#fff;font-weight:800;font-size:1rem;cursor:pointer;-webkit-tap-highlight-color:transparent}
+  .v-swipe-content{position:relative;z-index:2;background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:12px 14px;transition:transform .55s cubic-bezier(.22,.61,.36,1);will-change:transform;touch-action:pan-y;user-select:none;-webkit-user-select:none}
+
   .v-bal{font-size:1.15rem;font-weight:700;color:#fbbf24}
   .summary-row{display:flex;gap:8px;margin-bottom:12px}
   .summary-box{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:12px;text-align:center}
@@ -465,17 +470,24 @@
         const bal=personBalance(p);
         const openId='vp_'+p.id;
         const sira = pi + 1;
-        html+=`<div class="v-card">
-          <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleBlock('${openId}')">
-            <div><strong>▸ ${sira}. ${p.name}</strong><div class="meta">${(p.entries||[]).length} kayıt</div></div>
-            <div style="text-align:right"><div class="v-bal">${money(bal)}</div>
-              <div style="display:flex;gap:4px;justify-content:flex-end;margin-top:4px">
-                <button class="btn btn-secondary" style="padding:4px 8px;font-size:.75rem" onclick="event.stopPropagation();editPersonName('${p.id}')">Düzenle</button>
-                <button class="btn btn-danger" style="padding:4px 8px;font-size:.75rem" onclick="event.stopPropagation();deletePerson('${p.id}')">Sil</button>
+        html+=`<div class="v-swipe-wrap" data-pid="${p.id}">
+          <div class="v-swipe-actions">
+            <button type="button" class="v-swipe-del">Sil</button>
+          </div>
+          <div class="v-swipe-content" id="vswipe_${p.id}">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+              <div style="flex:1;cursor:pointer;min-width:0" onclick="toggleBlock('${openId}')">
+                <strong>▸ ${sira}. ${p.name}</strong>
+                <div class="meta">${(p.entries||[]).length} kayıt</div>
+              </div>
+              <div style="text-align:right;flex-shrink:0">
+                <div class="v-bal" style="cursor:pointer" onclick="toggleBlock('${openId}')">${money(bal)}</div>
+                <div style="margin-top:4px">
+                  <button type="button" class="btn btn-secondary" style="padding:4px 8px;font-size:.75rem" onclick="editPersonName('${p.id}')">Düzenle</button>
+                </div>
               </div>
             </div>
-          </div>
-          <div id="${openId}" style="display:none;margin-top:10px">`;
+            <div id="${openId}" style="display:none;margin-top:10px">`;
         (p.entries||[]).forEach(e=>{
           const d=new Date(e.date);
           const day=d.toLocaleDateString('tr-TR',{day:'2-digit',month:'long',year:'numeric'});
@@ -487,15 +499,17 @@
               <strong style="color:${e.paid?'#4ade80':'#fbbf24'}">${money(e.total)}${e.paid?' · Ödendi':''}</strong>
             </div>
             ${items}
-            <div style="display:flex;gap:6px;margin-top:8px">
+            <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
               ${!e.paid?`<button class="btn btn-success" style="padding:6px 10px;font-size:.8rem" onclick="markPaid('${p.id}','${e.id}')">Ödendi</button>`:''}
-              <button class="btn btn-danger" style="padding:6px 10px;font-size:.8rem" onclick="deleteEntry('${p.id}','${e.id}')">Sil</button>
+              <button type="button" class="btn btn-secondary" style="padding:6px 10px;font-size:.8rem" onclick="editVeresiyeEntry('${p.id}','${e.id}')">Düzenle</button>
+              <button type="button" class="btn btn-danger" style="padding:6px 10px;font-size:.8rem" onclick="deleteEntry('${p.id}','${e.id}')">Sil</button>
             </div>
           </div>`;
         });
-        html+=`</div></div>`;
+        html+=`</div></div></div>`;
       });
       el.innerHTML=html;
+      bindVeresiyeSwipe();
     }
 
     function markPaid(pid,eid){
@@ -514,66 +528,355 @@
     }
 
     function deleteEntry(pid,eid){
-      const p=veresiye.find(x=>x.id===pid);
+      try{
+        const p=veresiye.find(x=>String(x.id)===String(pid));
+        if(!p){ toast('Kişi bulunamadı'); return; }
+        const idx=(p.entries||[]).findIndex(x=>String(x.id)===String(eid));
+        if(idx<0){ toast('Kayıt bulunamadı'); return; }
+        if(!confirm('Bu veresiye kaydı silinsin mi?')) return;
+        deletedVeresiyeStack.push({type:'entry',personId:pid,entry:p.entries[idx]});
+        p.entries.splice(idx,1);
+        saveVeresiye();
+        renderVeresiye();
+        toast('Kayıt silindi');
+      }catch(err){ console.error(err); toast('Silinemedi'); }
+    }
+
+    function editVeresiyeEntry(pid, eid){
+      const p = veresiye.find(x => x.id === pid);
       if(!p) return;
-      const idx=p.entries.findIndex(x=>x.id===eid);
-      if(idx<0) return;
-      deletedVeresiyeStack.push({type:'entry',personId:pid,entry:p.entries[idx]});
-      p.entries.splice(idx,1);
+      const e = (p.entries||[]).find(x => x.id === eid);
+      if(!e) return;
+      stopLiveScanner();
+      window._editVPid = pid;
+      window._editVEid = eid;
+      window._editVItems = JSON.parse(JSON.stringify(e.items && e.items.length ? e.items : [{name:'', qty:1, price:0}]));
+      document.getElementById('modal').innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <h2 style="margin:0">Satış Düzenle</h2>
+          <button class="btn btn-secondary" style="padding:6px 12px" onclick="closeModal()">Kapat</button>
+        </div>
+        <div class="meta" style="margin-bottom:10px">${p.name}</div>
+        <div id="editVItems"></div>
+        <button class="btn btn-secondary btn-block" style="margin:10px 0" onclick="addEditVItem()">+ Ürün Ekle</button>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:var(--bg);border-radius:10px;border:1px solid var(--border);margin-bottom:12px">
+          <strong>Toplam</strong>
+          <strong id="editVTotal" style="color:#fbbf24;font-size:1.15rem">0,00 ₺</strong>
+        </div>
+        <button class="btn btn-primary btn-block" onclick="saveVeresiyeEntry()">Kaydet</button>
+        <button class="btn btn-secondary btn-block" style="margin-top:8px" onclick="closeModal()">İptal</button>`;
+      document.getElementById('modalBg').classList.add('show');
+      renderEditVItems();
+    }
+
+    function renderEditVItems(){
+      const box = document.getElementById('editVItems');
+      if(!box || !window._editVItems) return;
+      box.innerHTML = window._editVItems.map((it, idx) => {
+        const n = String(it.name||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+        return `<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px">
+          <div class="form-group" style="margin-bottom:8px">
+            <label>Ürün</label>
+            <input value="${n}" oninput="window._editVItems[${idx}].name=this.value">
+          </div>
+          <div class="form-row">
+            <div class="form-group" style="margin-bottom:0">
+              <label>Adet</label>
+              <input type="number" min="1" step="1" value="${it.qty||1}" oninput="window._editVItems[${idx}].qty=parseInt(this.value)||1;updateEditVTotal()">
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label>Fiyat (₺)</label>
+              <input type="number" min="0" step="0.01" value="${it.price||0}" oninput="window._editVItems[${idx}].price=parseFloat(this.value)||0;updateEditVTotal()">
+            </div>
+          </div>
+          <button class="btn btn-danger" style="padding:4px 10px;font-size:.75rem;margin-top:8px" onclick="removeEditVItem(${idx})">Satırı Sil</button>
+        </div>`;
+      }).join('') || '<div class="empty" style="padding:16px">Ürün yok</div>';
+      updateEditVTotal();
+    }
+
+    function updateEditVTotal(){
+      const total = (window._editVItems||[]).reduce((s,it)=>s+(Number(it.price)||0)*(Number(it.qty)||0),0);
+      const el = document.getElementById('editVTotal');
+      if(el) el.textContent = money(total);
+    }
+
+    function addEditVItem(){
+      if(!window._editVItems) window._editVItems = [];
+      window._editVItems.push({name:'', qty:1, price:0});
+      renderEditVItems();
+    }
+
+    function removeEditVItem(idx){
+      if(!window._editVItems) return;
+      window._editVItems.splice(idx,1);
+      if(!window._editVItems.length) window._editVItems.push({name:'', qty:1, price:0});
+      renderEditVItems();
+    }
+
+    function saveVeresiyeEntry(){
+      const pid = window._editVPid, eid = window._editVEid;
+      const p = veresiye.find(x => x.id === pid);
+      if(!p) return;
+      const e = (p.entries||[]).find(x => x.id === eid);
+      if(!e) return;
+      const items = (window._editVItems||[])
+        .map(it => ({
+          name: String(it.name||'').trim() || 'Ürün',
+          qty: Math.max(1, parseInt(it.qty)||1),
+          price: Math.max(0, parseFloat(it.price)||0)
+        }))
+        .filter(it => it.name);
+      if(!items.length){ toast('En az bir ürün gerekli'); return; }
+      e.items = items;
+      e.total = items.reduce((s,it)=>s+it.price*it.qty, 0);
+      saveVeresiye();
+      closeModal();
+      renderVeresiye();
+      toast('Kayıt güncellendi · ' + money(e.total));
+    }
+
+
+    function bindVeresiyeSwipe(){
+      document.querySelectorAll('.v-swipe-wrap').forEach(wrap => {
+        const contentEl = wrap.querySelector('.v-swipe-content');
+        const delBtn = wrap.querySelector('.v-swipe-del');
+        if(!contentEl) return;
+        if(contentEl._swipeBound) return;
+        contentEl._swipeBound = true;
+        let startX=0, startY=0, curX=0, dragging=false, opened=false, axis=null;
+        const MAX=96;
+
+        function setX(x, anim){
+          contentEl.style.transition = anim ? 'transform .55s cubic-bezier(.22,.61,.36,1)' : 'none';
+          contentEl.style.transform = 'translate3d(' + x + 'px,0,0)';
+          curX = x;
+        }
+
+        function onStart(x,y){
+          startX=x; startY=y; axis=null; dragging=true;
+          contentEl.style.transition='none';
+        }
+        function onMove(x,y,e){
+          if(!dragging) return;
+          const dx=x-startX, dy=y-startY;
+          if(axis===null){
+            if(Math.abs(dx)<8 && Math.abs(dy)<8) return;
+            axis = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
+          }
+          if(axis==='v'){ dragging=false; return; }
+          if(e && e.cancelable) e.preventDefault();
+          // yavaş kayma: parmağın %55'i kadar hareket
+          const slowDx = dx * 0.55;
+          let nx = (opened ? -MAX : 0) + slowDx;
+          if(nx>0) nx=0;
+          if(nx<-MAX*1.25) nx=-MAX*1.25;
+          setX(nx, false);
+        }
+        function onEnd(){
+          if(!dragging && axis!=='h'){ dragging=false; axis=null; return; }
+          dragging=false;
+          if(curX <= -MAX*1.1){
+            setX(0, true);
+            opened=false;
+            const pid = wrap.getAttribute('data-pid');
+            doDeletePerson(pid, true);
+            axis=null;
+            return;
+          }
+          if(curX <= -MAX*0.35){
+            setX(-MAX, true);
+            opened=true;
+          } else {
+            setX(0, true);
+            opened=false;
+          }
+          axis=null;
+        }
+
+        contentEl.addEventListener('touchstart', e=>{
+          if(e.touches.length!==1) return;
+          onStart(e.touches[0].clientX, e.touches[0].clientY);
+        }, {passive:true});
+        contentEl.addEventListener('touchmove', e=>{
+          if(e.touches.length!==1) return;
+          onMove(e.touches[0].clientX, e.touches[0].clientY, e);
+        }, {passive:false});
+        contentEl.addEventListener('touchend', onEnd);
+        contentEl.addEventListener('touchcancel', onEnd);
+
+        contentEl.addEventListener('mousedown', e=>{
+          onStart(e.clientX, e.clientY);
+          const mm = ev => onMove(ev.clientX, ev.clientY, ev);
+          const mu = () => { onEnd(); window.removeEventListener('mousemove', mm); window.removeEventListener('mouseup', mu); };
+          window.addEventListener('mousemove', mm);
+          window.addEventListener('mouseup', mu);
+        });
+
+        if(delBtn){
+          delBtn.onclick = function(ev){
+            ev.preventDefault();
+            ev.stopPropagation();
+            const pid = wrap.getAttribute('data-pid');
+            doDeletePerson(pid, false);
+          };
+        }
+      });
+    }
+
+    function doDeletePerson(pid, fromSwipe){
+      if(pid===undefined || pid===null || pid===''){ toast('Kişi yok'); return; }
+      const idx = veresiye.findIndex(x => String(x.id)===String(pid));
+      if(idx < 0){ toast('Kişi bulunamadı'); return; }
+      const nm = veresiye[idx].name || 'Kişi';
+      // Kaydırarak silmede onay yok (Geri Al var). Butona basınca da direkt sil.
+      deletedVeresiyeStack.push({type:'person', person: veresiye[idx]});
+      veresiye.splice(idx, 1);
       saveVeresiye();
       renderVeresiye();
-      toast('Kayıt silindi');
+      toast('Silindi · ' + nm + ' · Geri Al ile dönebilirsin');
     }
 
     function deletePerson(pid){
-      const idx=veresiye.findIndex(x=>x.id===pid);
-      if(idx<0) return;
-      if(!confirm(veresiye[idx].name+' silinsin mi?')) return;
-      deletedVeresiyeStack.push({type:'person',person:veresiye[idx]});
-      veresiye.splice(idx,1);
-      saveVeresiye();
-      renderVeresiye();
-      toast('Kişi silindi');
+      doDeletePerson(pid, false);
     }
 
     function editPersonName(pid){
       const p = veresiye.find(x => x.id === pid);
       if(!p) return;
       stopLiveScanner();
+      window._editPersonId = pid;
+      // Kişinin tüm kayıtlarını düzenlenebilir kopyala
+      window._editPersonEntries = JSON.parse(JSON.stringify(p.entries || []));
+      window._editPersonEntries.forEach(e=>{
+        if(!e.items || !e.items.length) e.items = [{name:'', qty:1, price:e.total||0}];
+      });
       const safeName = String(p.name||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
       document.getElementById('modal').innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-          <h2 style="margin:0">İsim Düzenle</h2>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <h2 style="margin:0">Düzenle</h2>
           <button class="btn btn-secondary" style="padding:6px 12px" onclick="closeModal()">Kapat</button>
         </div>
         <div class="form-group">
           <label>Müşteri Adı</label>
-          <input id="editPersonNameInput" value="${safeName}" autofocus>
+          <input id="editPersonNameInput" value="${safeName}">
         </div>
-        <p style="font-size:.8rem;color:var(--muted);margin:8px 0 14px">İsim değişince tüm borç kayıtları korunur. Aynı isim varsa birleştirilir.</p>
-        <button class="btn btn-primary btn-block" onclick="savePersonName('${pid}')">Kaydet</button>
+        <div style="font-size:.85rem;font-weight:600;margin:14px 0 8px;color:var(--muted)">Satış kayıtları · ürün / fiyat</div>
+        <div id="editPersonEntriesBox"></div>
+        <button class="btn btn-primary btn-block" style="margin-top:12px" onclick="savePersonFullEdit()">Kaydet</button>
         <button class="btn btn-secondary btn-block" style="margin-top:8px" onclick="closeModal()">İptal</button>`;
       document.getElementById('modalBg').classList.add('show');
+      renderPersonEntriesEdit();
       setTimeout(()=>{
         const inp = document.getElementById('editPersonNameInput');
-        if(inp){ inp.focus(); inp.select(); }
+        if(inp){ inp.focus(); }
       }, 80);
     }
 
-    function savePersonName(pid){
+    function renderPersonEntriesEdit(){
+      const box = document.getElementById('editPersonEntriesBox');
+      if(!box || !window._editPersonEntries) return;
+      if(!window._editPersonEntries.length){
+        box.innerHTML = '<div class="empty" style="padding:16px">Kayıt yok</div>';
+        return;
+      }
+      box.innerHTML = window._editPersonEntries.map((e, ei) => {
+        const d = new Date(e.date);
+        const day = isNaN(d.getTime()) ? '' : d.toLocaleDateString('tr-TR',{day:'2-digit',month:'short',year:'numeric'});
+        const time = isNaN(d.getTime()) ? '' : d.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});
+        const itemsHtml = (e.items||[]).map((it, ii) => {
+          const n = String(it.name||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+          return `<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:6px">
+            <div class="form-group" style="margin-bottom:6px">
+              <label>Ürün</label>
+              <input value="${n}" oninput="window._editPersonEntries[${ei}].items[${ii}].name=this.value;recalcPersonEntryTotal(${ei})">
+            </div>
+            <div class="form-row">
+              <div class="form-group" style="margin-bottom:0">
+                <label>Adet</label>
+                <input type="number" min="1" step="1" value="${it.qty||1}" oninput="window._editPersonEntries[${ei}].items[${ii}].qty=parseInt(this.value)||1;recalcPersonEntryTotal(${ei})">
+              </div>
+              <div class="form-group" style="margin-bottom:0">
+                <label>Fiyat (₺)</label>
+                <input type="number" min="0" step="0.01" value="${it.price||0}" oninput="window._editPersonEntries[${ei}].items[${ii}].price=parseFloat(this.value)||0;recalcPersonEntryTotal(${ei})">
+              </div>
+            </div>
+            <button class="btn btn-danger" style="padding:3px 8px;font-size:.72rem;margin-top:6px" onclick="removePersonEntryItem(${ei},${ii})">Satırı Sil</button>
+          </div>`;
+        }).join('');
+        return `<div style="border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:12px;background:var(--bg)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <div class="meta">${day} ${time}${e.paid?' · Ödendi':''}</div>
+            <strong id="petotal_${ei}" style="color:#fbbf24">${money(e.total||0)}</strong>
+          </div>
+          ${itemsHtml}
+          <button class="btn btn-secondary" style="padding:4px 10px;font-size:.75rem;margin-top:4px" onclick="addPersonEntryItem(${ei})">+ Ürün Ekle</button>
+        </div>`;
+      }).join('');
+    }
+
+    function recalcPersonEntryTotal(ei){
+      const e = window._editPersonEntries && window._editPersonEntries[ei];
+      if(!e) return;
+      e.total = (e.items||[]).reduce((s,it)=>s+(Number(it.price)||0)*(Number(it.qty)||0),0);
+      const el = document.getElementById('petotal_'+ei);
+      if(el) el.textContent = money(e.total);
+    }
+
+    function addPersonEntryItem(ei){
+      const e = window._editPersonEntries && window._editPersonEntries[ei];
+      if(!e) return;
+      if(!e.items) e.items = [];
+      e.items.push({name:'', qty:1, price:0});
+      renderPersonEntriesEdit();
+    }
+
+    function removePersonEntryItem(ei, ii){
+      const e = window._editPersonEntries && window._editPersonEntries[ei];
+      if(!e || !e.items) return;
+      e.items.splice(ii,1);
+      if(!e.items.length) e.items.push({name:'', qty:1, price:0});
+      recalcPersonEntryTotal(ei);
+      renderPersonEntriesEdit();
+    }
+
+    function savePersonFullEdit(){
+      const pid = window._editPersonId;
       const p = veresiye.find(x => x.id === pid);
       if(!p) return;
       const newName = normName(document.getElementById('editPersonNameInput').value || '');
       if(!newName){ toast('İsim boş olamaz'); return; }
-      const oldKey = normName(p.name).toLocaleLowerCase('tr');
-      const newKey = newName.toLocaleLowerCase('tr');
-      if(oldKey === newKey){ closeModal(); return; }
+
+      // Kayıtları güncelle
+      const newEntries = (window._editPersonEntries||[]).map(e => {
+        const items = (e.items||[])
+          .map(it => ({
+            name: String(it.name||'').trim() || 'Ürün',
+            qty: Math.max(1, parseInt(it.qty)||1),
+            price: Math.max(0, parseFloat(it.price)||0)
+          }))
+          .filter(it => it.name);
+        const total = items.reduce((s,it)=>s+it.price*it.qty, 0);
+        return Object.assign({}, e, { items, total });
+      });
+      p.entries = newEntries;
       p.name = newName;
-      saveVeresiye(); // mergeVeresiyeNames çağrılır, aynı isim varsa birleştirir
+      saveVeresiye();
       closeModal();
       renderVeresiye();
-      toast('İsim güncellendi · ' + newName);
+      toast('Güncellendi · ' + newName);
     }
+
+    function savePersonName(pid){
+      // Eski isim kaydı — tam düzenlemeye yönlendir
+      savePersonFullEdit();
+    }
+
+    window.deletePerson = deletePerson;
+    window.doDeletePerson = doDeletePerson;
+    window.deleteEntry = deleteEntry;
+    window.editPersonName = editPersonName;
+    window.savePersonFullEdit = savePersonFullEdit;
 
     function undoVeresiye(){
       if(!deletedVeresiyeStack.length) return;
