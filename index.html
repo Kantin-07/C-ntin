@@ -1031,59 +1031,284 @@
     }
 
     // ===== KAMERA =====
-    function startLiveScanner(){
-      const st=document.getElementById('scanStatus');
-      const wrap=document.querySelector('.scanner-wrap');
-      if(location.protocol==='file:'){ if(st) st.textContent='HTTPS gerekli'; return; }
-      if(typeof Html5Qrcode==='undefined'){ if(st) st.textContent='Kütüphane yükleniyor...'; setTimeout(startLiveScanner,500); return; }
-      stopLiveScanner();
-      const oldBtn=document.getElementById('camStartBtn'); if(oldBtn) oldBtn.remove();
-      const config={fps:30,qrbox:(w,h)=>({width:Math.floor(w*0.92),height:Math.floor(Math.min(h*0.38,170))}),aspectRatio:1.333};
-      const onSuccess=(code)=>{ const now=Date.now(); if(code===lastCode&&now-lastScanTime<2200) return; lastCode=code; lastScanTime=now; onBarcodeDetected(code); };
-      const onReady=()=>{ if(st){st.textContent='Hazır · Barkodu tut'; st.classList.add('active');} const b=document.getElementById('camStartBtn'); if(b)b.remove();
-        setTimeout(()=>{document.querySelectorAll('#liveScanner div').forEach(d=>{try{if(d.style)d.style.border='none';}catch(e){}});},400); };
-      const showCamButton=(msg)=>{ if(st) st.textContent=msg||'Kamera izni gerekli'; if(document.getElementById('camStartBtn')) return;
-        const btn=document.createElement('button'); btn.id='camStartBtn'; btn.className='btn btn-primary';
-        btn.style.cssText='position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:10;padding:16px 28px;font-size:1.05rem;border-radius:16px';
-        btn.textContent='📷 Kamerayı Aç';
-        btn.onclick=(e)=>{e.preventDefault();btn.textContent='Açılıyor...';requestCamera();};
-        if(wrap) wrap.appendChild(btn); };
-      const requestCamera=()=>{
-        const scanner=new Html5Qrcode('liveScanner',{verbose:false}); liveScanner=scanner;
-        scanner.start({facingMode:'environment'},config,onSuccess,()=>{}).then(onReady).catch(()=>{
-          Html5Qrcode.getCameras().then(cams=>{
-            if(!cams||!cams.length){showCamButton('Kamera bulunamadı');return;}
-            let cid=cams[cams.length-1].id;
-            const back=cams.find(c=>/back|arka|rear|environment/i.test(c.label||''));
-            if(back) cid=back.id;
-            const s2=new Html5Qrcode('liveScanner',{verbose:false}); liveScanner=s2;
-            s2.start(cid,config,onSuccess,()=>{}).then(onReady).catch(()=>showCamButton('İzin verin · Tekrar deneyin'));
-          }).catch(()=>showCamButton('İzin verin · Tekrar deneyin'));
-        });
-      };
-      requestCamera();
+    /** Sadece 1D barkod (rakam) — QR yok → daha hızlı */
+    // ===== HIZLI BARKOD (sadece rakam / native detector) =====
+    let liveStream = null;
+    let scanTimer = null;
+    let scanBusy = false;
+    let nativeDetector = null;
+
+    function normalizeBarcode(raw){
+      const s = String(raw || '').trim();
+      if(!s) return '';
+      // Sadece rakamları al (çizgi görüntüsü değil, sayı değeri)
+      const digits = s.replace(/\D/g, '');
+      if(digits.length >= 6 && digits.length <= 18) return digits;
+      return s;
     }
-    function stopLiveScanner(){
-      if(!liveScanner) return;
-      const sc = liveScanner;
-      liveScanner = null;
+
+    function pickNearCameraId(cams){
+      if(!cams || !cams.length) return null;
+      const score = (label) => {
+        const l = (label || '').toLowerCase();
+        let s = 0;
+        if(/ultra\s*wide|ultrawide|0\.5|macro|yakın|near|wide|geniş/i.test(l)) s += 60;
+        if(/back|arka|rear|environment|world/i.test(l)) s += 25;
+        if(/tele|zoom|front|ön|user|selfie/i.test(l)) s -= 50;
+        return s;
+      };
+      let best = cams[0], bestS = -999;
+      cams.forEach(c => {
+        const sc = score(c.label);
+        if(sc > bestS){ bestS = sc; best = c; }
+      });
+      if(bestS <= 0 && cams.length > 1) return cams[cams.length - 1].id;
+      return best.id;
+    }
+
+    async function applyNearFocus(track){
+      if(!track || !track.getCapabilities) return;
       try {
-        if (typeof sc.getState === 'function') {
-          const state = sc.getState();
-          // 2=SCANNING, 3=PAUSED
-          if (state === 2 || state === 3) {
-            sc.stop().catch(()=>{}).finally(()=>{
-              const el = document.getElementById('liveScanner');
-              if(el) el.innerHTML = '';
-            });
-            return;
-          }
-        } else {
-          sc.stop().catch(()=>{});
+        const caps = track.getCapabilities();
+        const adv = [];
+        if(caps.focusMode){
+          if(caps.focusMode.includes('continuous')) adv.push({ focusMode: 'continuous' });
+          else if(caps.focusMode.includes('single-shot')) adv.push({ focusMode: 'single-shot' });
         }
+        if(caps.zoom != null){
+          const zmin = (typeof caps.zoom === 'object' ? caps.zoom.min : 1) || 1;
+          adv.push({ zoom: zmin }); // yakın için geniş açı
+        }
+        if(caps.focusDistance != null && typeof caps.focusDistance === 'object'){
+          // Daha yakın odak
+          const mid = (caps.focusDistance.min + caps.focusDistance.max) / 2;
+          adv.push({ focusDistance: Math.min(mid, caps.focusDistance.min + (caps.focusDistance.max - caps.focusDistance.min) * 0.25) });
+        }
+        if(adv.length) await track.applyConstraints({ advanced: adv });
       } catch(e) {}
+    }
+
+    function stopScanLoop(){
+      if(scanTimer){ clearInterval(scanTimer); scanTimer = null; }
+      scanBusy = false;
+    }
+
+    function stopLiveStream(){
+      stopScanLoop();
+      nativeDetector = null;
+      if(liveStream){
+        try { liveStream.getTracks().forEach(t => t.stop()); } catch(e) {}
+        liveStream = null;
+      }
+      if(liveScanner && liveScanner.__html5){
+        try {
+          const sc = liveScanner.__html5;
+          if(typeof sc.getState === 'function'){
+            const st = sc.getState();
+            if(st === 2 || st === 3) sc.stop().catch(()=>{});
+          } else sc.stop().catch(()=>{});
+        } catch(e) {}
+      }
+      liveScanner = null;
       const el = document.getElementById('liveScanner');
       if(el) el.innerHTML = '';
+    }
+
+    function startLiveScanner(){
+      const st = document.getElementById('scanStatus');
+      const wrap = document.querySelector('.scanner-wrap');
+      if(location.protocol === 'file:'){ if(st) st.textContent = 'HTTPS gerekli'; return; }
+      stopLiveStream();
+      const oldBtn = document.getElementById('camStartBtn'); if(oldBtn) oldBtn.remove();
+      if(st){ st.textContent = 'Kamera açılıyor...'; st.classList.remove('active'); }
+
+      const el = document.getElementById('liveScanner');
+      if(!el) return;
+      el.innerHTML = '';
+      const video = document.createElement('video');
+      video.setAttribute('playsinline', 'true');
+      video.setAttribute('muted', 'true');
+      video.setAttribute('autoplay', 'true');
+      video.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;background:#000';
+      el.appendChild(video);
+
+      // Dokununca odak dene
+      video.addEventListener('click', async () => {
+        try {
+          const track = liveStream && liveStream.getVideoTracks()[0];
+          if(track) await applyNearFocus(track);
+          if(st) st.textContent = 'Odaklandı · Barkodu tut';
+        } catch(e) {}
+      });
+
+      const onHit = (raw) => {
+        const code = normalizeBarcode(raw);
+        if(!code) return;
+        const now = Date.now();
+        if(code === lastCode && now - lastScanTime < 500) return;
+        lastCode = code;
+        lastScanTime = now;
+        onBarcodeDetected(code);
+      };
+
+      const startDetectLoop = () => {
+        stopScanLoop();
+        const formats = ['ean_13','ean_8','upc_a','upc_e','code_128','code_39','itf','codabar'];
+        if('BarcodeDetector' in window){
+          try { nativeDetector = new BarcodeDetector({ formats }); } catch(e) {
+            try { nativeDetector = new BarcodeDetector(); } catch(e2) { nativeDetector = null; }
+          }
+        }
+        // 50ms ≈ 20 tarama/sn — html5-qrcode'dan çok daha hızlı
+        scanTimer = setInterval(async () => {
+          if(scanBusy || !video.videoWidth) return;
+          scanBusy = true;
+          try {
+            if(nativeDetector){
+              const codes = await nativeDetector.detect(video);
+              if(codes && codes.length){
+                const raw = codes[0].rawValue || codes[0].rawData || '';
+                if(raw) onHit(raw);
+              }
+            }
+          } catch(e) {}
+          scanBusy = false;
+        }, 50);
+        if(st){ st.textContent = 'Hazır · Yakın tut · Dokun = odak'; st.classList.add('active'); }
+      };
+
+      const openStream = async (constraints) => {
+        if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+          throw new Error('getUserMedia yok');
+        }
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        liveStream = stream;
+        video.srcObject = stream;
+        video.muted = true;
+        video.playsInline = true;
+        video.setAttribute('playsinline', '');
+        video.setAttribute('webkit-playsinline', '');
+        try { await video.play(); } catch(e) {
+          // Safari bazen play için jest bekler
+          video.play().catch(()=>{});
+        }
+        const track = stream.getVideoTracks()[0];
+        await applyNearFocus(track);
+        liveScanner = { native: true, stream };
+        if(st){ st.textContent = 'Hazır · Yakın tut · Dokun = odak'; st.classList.add('active'); }
+        startDetectLoop();
+        // BarcodeDetector yoksa html5-qrcode yedek (sadece 1D)
+        if(!('BarcodeDetector' in window) && typeof Html5Qrcode !== 'undefined'){
+          startHtml5Fallback(onHit, st, video);
+        }
+      };
+
+      const tryOpen = async () => {
+        // Safari: önce izin + basit arka kamera, sonra yakın kameraya geç
+        try {
+          await openStream({
+            audio: false,
+            video: {
+              facingMode: { ideal: 'environment' },
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
+            }
+          });
+          // İzin sonrası etiketler gelir — yakın kameraya yükselt
+          try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const cams = devices.filter(d => d.kind === 'videoinput');
+            const nearId = pickNearCameraId(cams.map(c => ({ id: c.deviceId, label: c.label })));
+            if(nearId && liveStream){
+              const cur = liveStream.getVideoTracks()[0];
+              const curId = cur && cur.getSettings && cur.getSettings().deviceId;
+              if(nearId !== curId){
+                // Yeniden aç yakın kamera ile
+                stopScanLoop();
+                try { liveStream.getTracks().forEach(t => t.stop()); } catch(e) {}
+                liveStream = null;
+                await openStream({
+                  audio: false,
+                  video: {
+                    deviceId: { exact: nearId },
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                  }
+                });
+              }
+            }
+          } catch(e) {}
+        } catch(e1) {
+          try {
+            await openStream({ audio: false, video: true });
+          } catch(e2) {
+            if(st) st.textContent = 'Kamera izni gerekli — Ayarlar > Safari > Kamera';
+            showCamButton('📷 Kamerayı Aç', wrap, tryOpen);
+          }
+        }
+      };
+
+      const showCamButton = (msg, wrapEl, retryFn) => {
+        if(st) st.textContent = msg || 'Kamera izni gerekli';
+        if(document.getElementById('camStartBtn')) return;
+        const btn = document.createElement('button');
+        btn.id = 'camStartBtn';
+        btn.className = 'btn btn-primary';
+        btn.style.cssText = 'position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:10;padding:16px 28px;font-size:1.05rem;border-radius:16px';
+        btn.textContent = '📷 Kamerayı Aç';
+        btn.onclick = (e) => { e.preventDefault(); btn.textContent = 'Açılıyor...'; retryFn(); };
+        if(wrapEl) wrapEl.appendChild(btn);
+      };
+
+      tryOpen();
+    }
+
+    function startHtml5Fallback(onHit, st, existingVideo){
+      try {
+        // Mevcut video stream'i html5'e vermek zor; ayrı div kullan
+        const el = document.getElementById('liveScanner');
+        if(!el) return;
+        // Native stream'i kapat, html5 devralır
+        stopScanLoop();
+        if(liveStream){
+          try { liveStream.getTracks().forEach(t => t.stop()); } catch(e) {}
+          liveStream = null;
+        }
+        if(existingVideo) existingVideo.remove();
+        el.innerHTML = '';
+        const formats = barcodeFormatsSafe();
+        const cfg = {
+          fps: 30,
+          qrbox: (w,h) => ({ width: Math.floor(w*0.94), height: Math.floor(Math.min(h*0.25, 100)) }),
+          disableFlip: true,
+          experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+        };
+        if(formats) cfg.formatsToSupport = formats;
+        const sc = new Html5Qrcode('liveScanner', { verbose: false });
+        liveScanner = { __html5: sc };
+        sc.start(
+          { facingMode: 'environment' },
+          cfg,
+          (code) => onHit(code),
+          () => {}
+        ).then(() => {
+          if(st){ st.textContent = 'Hazır · Yakın tut'; st.classList.add('active'); }
+        }).catch(() => {
+          if(st) st.textContent = 'Kamera açılamadı';
+        });
+      } catch(e) {
+        if(st) st.textContent = 'Tarayıcı desteklemiyor';
+      }
+    }
+    function barcodeFormatsSafe(){
+      try {
+        const F = Html5QrcodeSupportedFormats;
+        return [F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_39, F.ITF];
+      } catch(e) { return undefined; }
+    }
+
+    function stopLiveScanner(){
+      stopLiveStream();
     }
 
     function onBarcodeDetected(code){
@@ -1148,22 +1373,10 @@
 
     let productScanner = null;
     function scanBarcodeForProduct(){
-      if(typeof Html5Qrcode === 'undefined'){ toast('Kamera kütüphanesi yok'); return; }
-      // Satış kamerasını bırak (tek kamera)
-      stopLiveScanner();
-      // Eski ürün tarayıcısını temizle
-      if(productScanner){
-        const sc = productScanner;
-        productScanner = null;
-        try {
-          if (typeof sc.getState === 'function') {
-            const state = sc.getState();
-            if (state === 2 || state === 3) sc.stop().catch(()=>{});
-          } else {
-            sc.stop().catch(()=>{});
-          }
-        } catch(e) {}
+      if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+        toast('Kamera desteklenmiyor'); return;
       }
+      stopProductScan();
       const area = document.getElementById('productScanArea');
       const box = document.getElementById('productScanner');
       const st = document.getElementById('productScanStatus');
@@ -1171,49 +1384,82 @@
       box.innerHTML = '';
       area.style.display = 'block';
       if(st) st.textContent = 'Kamera açılıyor...';
-      // Görünür olsun diye kaydır
       setTimeout(()=>{ area.scrollIntoView({ behavior:'smooth', block:'center' }); }, 100);
 
-      const onCode = (code) => {
+      const video = document.createElement('video');
+      video.setAttribute('playsinline','true');
+      video.setAttribute('muted','true');
+      video.setAttribute('autoplay','true');
+      video.style.cssText = 'width:100%;height:260px;object-fit:cover;display:block;background:#000;border-radius:12px';
+      box.appendChild(video);
+
+      let prodStream = null;
+      let prodTimer = null;
+      let prodBusy = false;
+      let prodDet = null;
+
+      const cleanup = () => {
+        if(prodTimer){ clearInterval(prodTimer); prodTimer = null; }
+        if(prodStream){ try{ prodStream.getTracks().forEach(t=>t.stop()); }catch(e){} prodStream = null; }
+        productScanner = { stop: cleanup };
+      };
+      productScanner = { stop: cleanup };
+
+      const onCode = (raw) => {
+        const code = normalizeBarcode(raw);
+        if(!code) return;
         const b = document.getElementById('b');
         if(b) b.value = code;
         stopProductScan();
         beep();
-        toast('Barkod alındı');
-      };
-      const cfg = {
-        fps: 28,
-        qrbox: { width: 280, height: 140 },
-        aspectRatio: 1.333,
-        videoConstraints: { facingMode: 'environment' }
+        toast('Barkod alındı: ' + code);
       };
 
-      const startWith = (cam) => {
-        productScanner = new Html5Qrcode('productScanner', { verbose: false });
-        return productScanner.start(cam, cfg, onCode, ()=>{}).then(()=>{
-          if(st) st.textContent = 'Barkodu kameraya tutun';
-          // Video boyutunu zorla
-          setTimeout(()=>{
-            const vid = box.querySelector('video');
-            if(vid){
-              vid.style.width = '100%';
-              vid.style.height = '260px';
-              vid.style.objectFit = 'cover';
-              vid.style.display = 'block';
-            }
-          }, 300);
-        });
-      };
-
-      startWith({ facingMode: 'environment' }).catch(()=>{
-        Html5Qrcode.getCameras().then(cams=>{
-          if(!cams || !cams.length){ if(st) st.textContent='Kamera bulunamadı'; toast('Kamera bulunamadı'); return; }
-          let cid = cams[cams.length-1].id;
-          const back = cams.find(c => /back|arka|rear|environment/i.test(c.label||''));
-          if(back) cid = back.id;
-          startWith(cid).catch(()=>{ if(st) st.textContent='İzin gerekli'; toast('Kamera izni gerekli'); });
-        }).catch(()=>{ if(st) st.textContent='Açılamadı'; toast('Kamera açılamadı'); });
+      video.addEventListener('click', async () => {
+        try {
+          const track = prodStream && prodStream.getVideoTracks()[0];
+          if(track) await applyNearFocus(track);
+        } catch(e) {}
       });
+
+      (async () => {
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const cams = devices.filter(d => d.kind === 'videoinput');
+          const nearId = pickNearCameraId(cams.map(c => ({ id: c.deviceId, label: c.label })));
+          const constraints = {
+            audio: false,
+            video: nearId
+              ? { deviceId: { ideal: nearId }, width: { ideal: 1280 }, height: { ideal: 720 } }
+              : { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+          };
+          prodStream = await navigator.mediaDevices.getUserMedia(constraints);
+          video.srcObject = prodStream;
+          await video.play();
+          await applyNearFocus(prodStream.getVideoTracks()[0]);
+          if('BarcodeDetector' in window){
+            try { prodDet = new BarcodeDetector({ formats: ['ean_13','ean_8','upc_a','upc_e','code_128','code_39','itf'] }); }
+            catch(e) { try { prodDet = new BarcodeDetector(); } catch(e2) {} }
+          }
+          if(st) st.textContent = prodDet ? 'Hazır · Yakın tut · Dokun = odak' : 'Barkodu tutun';
+          prodTimer = setInterval(async () => {
+            if(prodBusy || !video.videoWidth || !prodDet) return;
+            prodBusy = true;
+            try {
+              const codes = await prodDet.detect(video);
+              if(codes && codes.length){
+                const raw = codes[0].rawValue || '';
+                if(raw) onCode(raw);
+              }
+            } catch(e) {}
+            prodBusy = false;
+          }, 50);
+          productScanner = { stop: cleanup, stream: prodStream };
+        } catch(e) {
+          if(st) st.textContent = 'Kamera izni gerekli';
+          toast('Kamera açılamadı');
+        }
+      })();
     }
     function stopProductScan(){
       const area = document.getElementById('productScanArea');
