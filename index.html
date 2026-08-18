@@ -1073,7 +1073,20 @@
         onBarcodeDetected(code);
       };
       const onReady=()=>{
-        if(st){ st.textContent='Hazır · Sürekli okuma açık'; st.classList.add('active'); }
+        // iPhone destekliyorsa gerçek optik/dijital kamera zoomunu uygula.
+        // Böylece barkod görüntüde daha yakın görünür; desteklenmiyorsa normal kamerada kalır.
+        try {
+          const vid = document.querySelector('#liveScanner video');
+          const track = vid && vid.srcObject && vid.srcObject.getVideoTracks ? vid.srcObject.getVideoTracks()[0] : null;
+          const caps = track && track.getCapabilities ? track.getCapabilities() : null;
+          if(track && caps && typeof caps.zoom === 'object' && caps.zoom.max) {
+            const min = Number(caps.zoom.min || 1);
+            const max = Number(caps.zoom.max || min);
+            const target = Math.min(max, Math.max(min, 2.5));
+            if(track.applyConstraints) track.applyConstraints({advanced:[{zoom:target}] }).catch(()=>{});
+          }
+        } catch(e) {}
+        if(st){ st.textContent='Hazır · Yakın kamera · Sürekli okuma açık'; st.classList.add('active'); }
         const b=document.getElementById('camStartBtn'); if(b) b.remove();
         setTimeout(()=>{
           document.querySelectorAll('#liveScanner div').forEach(d=>{ try{ if(d.style) d.style.border='none'; }catch(e){} });
@@ -1096,13 +1109,12 @@
         const score = (label) => {
           const l = (label || '').toLowerCase();
           if(/front|ön|user|selfie|face/i.test(l)) return -1000;
-          if(/tele|zoom|2x|3x|5x|telephoto/i.test(l)) return -500;
+          // Yakınlaştıran kamera öncelikli: 2x/3x/5x/tele varsa onu kullan.
+          if(/tele|telephoto|2x|3x|5x|zoom/i.test(l)) return 500;
           let s = 0;
-          // Uzak barkod için ana geniş (1x) arka kamera öncelikli.
-          // Ultra-wide uzak barkodda daha az piksel ayırabildiği için ikinci tercih.
-          if(/wide|geniş|main|ana|1x|back wide|arka wide/i.test(l) && !/ultra|tele|zoom/i.test(l)) s += 120;
           if(/back|arka|rear|environment|world/i.test(l)) s += 60;
-          if(/ultra\s*wide|ultrawide|ultra-wide|0\.5|macro|yakın|near/i.test(l)) s += 20;
+          if(/wide|geniş|main|ana|1x|back wide|arka wide/i.test(l) && !/ultra/i.test(l)) s += 80;
+          if(/ultra\s*wide|ultrawide|ultra-wide|0\.5|macro|yakın|near/i.test(l)) s += 10;
           return s;
         };
         let best = null, bestS = -9999;
@@ -1110,14 +1122,12 @@
           const sc = score(c.label);
           if(sc > bestS){ bestS = sc; best = c; }
         });
-        // Hiç etiket yoksa: iPhone'da genelde sondan 2. veya son arka olur — tele'yi ele
         if(bestS <= 0){
           const nonFront = cams.filter(c => !/front|ön|user|selfie/i.test(c.label||''));
-          // Tele olmayanları tercih et
-          const noTele = nonFront.filter(c => !/tele|zoom|2x|3x/i.test(c.label||''));
-          const wide = noTele.find(c => /wide|main|ana|1x/i.test(c.label||''));
+          const tele = nonFront.find(c => /tele|telephoto|zoom|2x|3x|5x/i.test(c.label||''));
+          if(tele) return tele;
+          const wide = nonFront.find(c => /wide|main|ana|1x/i.test(c.label||''));
           if(wide) return wide;
-          if(noTele.length) return noTele[0];
           return nonFront[0] || cams[0];
         }
         return best;
@@ -1125,7 +1135,23 @@
       const startWithCam = (camIdOrConfig) => {
         const scanner = new Html5Qrcode('liveScanner', { verbose: false });
         liveScanner = scanner;
-        return scanner.start(camIdOrConfig, config, onSuccess, ()=>{}).then(onReady);
+        return scanner.start(camIdOrConfig, config, onSuccess, ()=>{}).then(()=>{
+          onReady();
+          // iPhone/Safari destekliyorsa gerçek kamera zoom'unu uygula.
+          // Böylece görüntü ekranda daha yakın görünür ve barkod uzaktan daha rahat yakalanır.
+          setTimeout(()=>{
+            try {
+              const video = document.querySelector('#liveScanner video');
+              const track = video && video.srcObject ? video.srcObject.getVideoTracks()[0] : null;
+              if(!track || !track.getCapabilities || !track.applyConstraints) return;
+              const caps = track.getCapabilities();
+              if(typeof caps.zoom === 'object' && typeof caps.zoom.max === 'number'){
+                const target = Math.min(caps.max, Math.max(caps.min || 1, 2.2));
+                track.applyConstraints({advanced:[{zoom:target}] }).catch(()=>{});
+              }
+            } catch(e) {}
+          }, 350);
+        });
       };
       const requestCamera = () => {
         // 1) Önce izin al (Safari etiketleri için şart)
