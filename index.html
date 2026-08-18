@@ -1071,20 +1071,58 @@
         btn.onclick=(e)=>{ e.preventDefault(); btn.textContent='Açılıyor...'; requestCamera(); };
         if(wrap) wrap.appendChild(btn);
       };
-      const requestCamera=()=>{
-        const scanner=new Html5Qrcode('liveScanner', { verbose: false });
-        liveScanner=scanner;
-        scanner.start({ facingMode: 'environment' }, config, onSuccess, ()=>{}).then(onReady).catch(()=>{
-          Html5Qrcode.getCameras().then(cams=>{
-            if(!cams||!cams.length){ showCamButton('Kamera bulunamadı'); return; }
-            let cid=cams[cams.length-1].id;
-            const back=cams.find(c=>/back|arka|rear|environment/i.test(c.label||''));
-            if(back) cid=back.id;
-            const s2=new Html5Qrcode('liveScanner', { verbose: false });
-            liveScanner=s2;
-            s2.start(cid, config, onSuccess, ()=>{}).then(onReady).catch(()=>showCamButton('İzin verin · Tekrar deneyin'));
-          }).catch(()=>showCamButton('İzin verin · Tekrar deneyin'));
+      /** Tele/uzak kamera ASLA; ultra-wide / yakın arka kamera tercih */
+      const pickNearBackCamera = (cams) => {
+        if(!cams || !cams.length) return null;
+        const score = (label) => {
+          const l = (label || '').toLowerCase();
+          if(/front|ön|user|selfie|face/i.test(l)) return -1000;
+          if(/tele|zoom|2x|3x|5x|telephoto/i.test(l)) return -500;
+          let s = 0;
+          // Yakın / ultra-wide en yüksek öncelik
+          if(/ultra\s*wide|ultrawide|ultra-wide|0\.5|macro|yakın|near/i.test(l)) s += 100;
+          if(/wide|geniş|dual\s*wide|dual wide/i.test(l) && !/tele/i.test(l)) s += 50;
+          if(/back|arka|rear|environment|world/i.test(l)) s += 30;
+          return s;
+        };
+        let best = null, bestS = -9999;
+        cams.forEach(c => {
+          const sc = score(c.label);
+          if(sc > bestS){ bestS = sc; best = c; }
         });
+        // Hiç etiket yoksa: iPhone'da genelde sondan 2. veya son arka olur — tele'yi ele
+        if(bestS <= 0){
+          const nonFront = cams.filter(c => !/front|ön|user|selfie/i.test(c.label||''));
+          // Tele olmayanları tercih et
+          const noTele = nonFront.filter(c => !/tele|zoom|2x|3x/i.test(c.label||''));
+          if(noTele.length) return noTele[0];
+          return nonFront[0] || cams[0];
+        }
+        return best;
+      };
+      const startWithCam = (camIdOrConfig) => {
+        const scanner = new Html5Qrcode('liveScanner', { verbose: false });
+        liveScanner = scanner;
+        return scanner.start(camIdOrConfig, config, onSuccess, ()=>{}).then(onReady);
+      };
+      const requestCamera = () => {
+        // 1) Önce izin al (Safari etiketleri için şart)
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+          .then(tmp => {
+            tmp.getTracks().forEach(t => t.stop());
+            return Html5Qrcode.getCameras();
+          })
+          .then(cams => {
+            if(!cams || !cams.length){
+              return startWithCam({ facingMode: 'environment' });
+            }
+            const near = pickNearBackCamera(cams);
+            if(st) st.textContent = 'Kamera: ' + ((near && near.label) || 'arka yakın');
+            return startWithCam(near ? near.id : { facingMode: 'environment' });
+          })
+          .catch(() => {
+            startWithCam({ facingMode: 'environment' }).catch(() => showCamButton('İzin verin · Tekrar deneyin'));
+          });
       };
       requestCamera();
     }
@@ -1214,15 +1252,35 @@
         });
       };
 
-      startWith({ facingMode: 'environment' }).catch(()=>{
-        Html5Qrcode.getCameras().then(cams=>{
-          if(!cams || !cams.length){ if(st) st.textContent='Kamera bulunamadı'; toast('Kamera bulunamadı'); return; }
-          let cid = cams[cams.length-1].id;
-          const back = cams.find(c => /back|arka|rear|environment/i.test(c.label||''));
-          if(back) cid = back.id;
-          startWith(cid).catch(()=>{ if(st) st.textContent='İzin gerekli'; toast('Kamera izni gerekli'); });
-        }).catch(()=>{ if(st) st.textContent='Açılamadı'; toast('Kamera açılamadı'); });
-      });
+      // Önce izin, sonra yakın (ultra-wide) arka kamera
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+        .then(tmp => {
+          tmp.getTracks().forEach(t => t.stop());
+          return Html5Qrcode.getCameras();
+        })
+        .then(cams => {
+          if(!cams || !cams.length) return startWith({ facingMode: 'environment' });
+          // Tele hariç, ultra-wide / wide tercih
+          const score = (label) => {
+            const l = (label || '').toLowerCase();
+            if(/front|ön|user|selfie/i.test(l)) return -1000;
+            if(/tele|zoom|2x|3x|5x/i.test(l)) return -500;
+            let s = 0;
+            if(/ultra\s*wide|ultrawide|0\.5|macro|yakın|near/i.test(l)) s += 100;
+            if(/wide|geniş|dual wide/i.test(l)) s += 50;
+            if(/back|arka|rear|environment/i.test(l)) s += 30;
+            return s;
+          };
+          let best = cams[0], bestS = -9999;
+          cams.forEach(c => { const sc = score(c.label); if(sc > bestS){ bestS = sc; best = c; } });
+          if(st) st.textContent = 'Kamera: ' + (best.label || 'yakın arka');
+          return startWith(best.id);
+        })
+        .catch(() => {
+          startWith({ facingMode: 'environment' }).catch(()=>{
+            if(st) st.textContent='İzin gerekli'; toast('Kamera izni gerekli');
+          });
+        });
     }
     function stopProductScan(){
       const area = document.getElementById('productScanArea');
