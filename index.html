@@ -1041,16 +1041,26 @@
       const config={
         // Hızlı kantin taraması: daha yüksek tarama frekansı + küçük ROI
         fps: 30,
-        qrbox: (w,h)=>({ width: Math.floor(w*0.86), height: Math.floor(Math.min(h*0.30, 130)) }),
+        qrbox: (w,h)=>({ width: Math.floor(w*0.94), height: Math.floor(Math.min(h*0.52, 260)) }),
         aspectRatio: 1.777,
         disableFlip: true,
         videoConstraints: {
           facingMode: { ideal: 'environment' },
-          width: { ideal: 1280, max: 1920 },
-          height: { ideal: 720, max: 1080 },
+          width: { ideal: 1920, max: 1920 },
+          height: { ideal: 1080, max: 1080 },
           frameRate: { ideal: 30, max: 30 },
           focusMode: 'continuous'
         },
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.ITF,
+          Html5QrcodeSupportedFormats.CODABAR
+        ],
         experimentalFeatures: { useBarCodeDetectorIfSupported: true }
       };
       const onSuccess=(code)=>{
@@ -1088,10 +1098,11 @@
           if(/front|ön|user|selfie|face/i.test(l)) return -1000;
           if(/tele|zoom|2x|3x|5x|telephoto/i.test(l)) return -500;
           let s = 0;
-          // Yakın / ultra-wide en yüksek öncelik
-          if(/ultra\s*wide|ultrawide|ultra-wide|0\.5|macro|yakın|near/i.test(l)) s += 100;
-          if(/wide|geniş|dual\s*wide|dual wide/i.test(l) && !/tele/i.test(l)) s += 50;
-          if(/back|arka|rear|environment|world/i.test(l)) s += 30;
+          // Uzak barkod için ana geniş (1x) arka kamera öncelikli.
+          // Ultra-wide uzak barkodda daha az piksel ayırabildiği için ikinci tercih.
+          if(/wide|geniş|main|ana|1x|back wide|arka wide/i.test(l) && !/ultra|tele|zoom/i.test(l)) s += 120;
+          if(/back|arka|rear|environment|world/i.test(l)) s += 60;
+          if(/ultra\s*wide|ultrawide|ultra-wide|0\.5|macro|yakın|near/i.test(l)) s += 20;
           return s;
         };
         let best = null, bestS = -9999;
@@ -1104,6 +1115,8 @@
           const nonFront = cams.filter(c => !/front|ön|user|selfie/i.test(c.label||''));
           // Tele olmayanları tercih et
           const noTele = nonFront.filter(c => !/tele|zoom|2x|3x/i.test(c.label||''));
+          const wide = noTele.find(c => /wide|main|ana|1x/i.test(c.label||''));
+          if(wide) return wide;
           if(noTele.length) return noTele[0];
           return nonFront[0] || cams[0];
         }
@@ -1245,8 +1258,8 @@
         disableFlip: true,
         videoConstraints: {
           facingMode: { ideal: 'environment' },
-          width: { ideal: 1280, max: 1920 },
-          height: { ideal: 720, max: 1080 },
+          width: { ideal: 1920, max: 1920 },
+          height: { ideal: 1080, max: 1080 },
           frameRate: { ideal: 30, max: 30 },
           focusMode: 'continuous'
         }
