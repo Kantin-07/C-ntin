@@ -1039,17 +1039,26 @@
       stopLiveScanner();
       const oldBtn=document.getElementById('camStartBtn'); if(oldBtn) oldBtn.remove();
       const config={
-        fps: 15,
-        qrbox: (w,h)=>({ width: Math.floor(w*0.92), height: Math.floor(Math.min(h*0.35, 160)) }),
-        aspectRatio: 1.333,
-        disableFlip: false,
+        // Hızlı kantin taraması: daha yüksek tarama frekansı + küçük ROI
+        fps: 30,
+        qrbox: (w,h)=>({ width: Math.floor(w*0.86), height: Math.floor(Math.min(h*0.30, 130)) }),
+        aspectRatio: 1.777,
+        disableFlip: true,
+        videoConstraints: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1280, max: 1920 },
+          height: { ideal: 720, max: 1080 },
+          frameRate: { ideal: 30, max: 30 },
+          focusMode: 'continuous'
+        },
         experimentalFeatures: { useBarCodeDetectorIfSupported: true }
       };
       const onSuccess=(code)=>{
         if(!code) return;
         const now=Date.now();
-        // Aynı ürün peş peşe eklenmesin (native app gibi kısa kilit)
-        if(code===lastCode && now-lastScanTime<1100) return;
+        // Aynı barkod kameranın önünde kaldığında tekrar tekrar ekleme;
+        // farklı barkodlar ise beklemeden okunur.
+        if(code===lastCode && now-lastScanTime<350) return;
         lastCode=code; lastScanTime=now;
         onBarcodeDetected(code);
       };
@@ -1168,7 +1177,7 @@
       // Kayıtlı ürün: sepete ekle, kamera kesintisiz devam
       addCart(p);
       const st=document.getElementById('scanStatus');
-      if(st){ st.textContent='✓ '+(p.name||'Eklendi')+' · Sonraki barkodu tut'; st.classList.add('active'); }
+      if(st){ st.textContent='✓ '+(p.name||'Eklendi')+'  ·  SONRAKİ BARKOD'; st.classList.add('active'); }
     }
     function manualSales(){ const code=prompt('Barkodu girin:'); if(code) onBarcodeDetected(code.trim()); }
     function addCart(p){
@@ -1180,7 +1189,7 @@
       const ex=cart.find(c=>c.id===p.id);
       if(ex){ if(ex.qty>=p.stock){toast('Stok yetersiz · Stok güncelle'); openModal(p.id); return;} ex.qty++; }
       else cart.push({id:p.id,name:p.name,price:p.price,qty:1});
-      updateCartUI(); toast(p.name+' eklendi');
+      updateCartUI();
     }
 
     function openModal(pid=null){
@@ -1230,10 +1239,17 @@
         toast('Barkod alındı');
       };
       const cfg = {
-        fps: 20,
-        qrbox: { width: 280, height: 140 },
-        aspectRatio: 1.333,
-        videoConstraints: { facingMode: 'environment' }
+        fps: 30,
+        qrbox: { width: 300, height: 120 },
+        aspectRatio: 1.777,
+        disableFlip: true,
+        videoConstraints: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1280, max: 1920 },
+          height: { ideal: 720, max: 1080 },
+          frameRate: { ideal: 30, max: 30 },
+          focusMode: 'continuous'
+        }
       };
 
       const startWith = (cam) => {
