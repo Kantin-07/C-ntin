@@ -137,13 +137,27 @@
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <script>
-    let products = JSON.parse(localStorage.getItem('bf_stok') || '[]');
-    let salesHistory = JSON.parse(localStorage.getItem('bf_sales') || '[]');
-    let veresiye = JSON.parse(localStorage.getItem('bf_veresiye') || '[]'); // {id, name, entries:[{id,date,total,items,paid}], deleted?}
+    function safeParse(key, fallback){
+      try {
+        const raw = localStorage.getItem(key);
+        if(raw == null || raw === '') return fallback;
+        const v = JSON.parse(raw);
+        return v == null ? fallback : v;
+      } catch(e){
+        console.error('Veri okuma hatası:', key, e);
+        return fallback;
+      }
+    }
+    let products = safeParse('bf_stok', []);
+    let salesHistory = safeParse('bf_sales', []);
+    let veresiye = safeParse('bf_veresiye', []); // {id, name, entries:[{id,date,total,items,paid}], deleted?}
     // isimler birleştirilecek init'te
     // Stok/fiyat her zaman sayı olsun (string gelirse "Stok yok" hatası oluşuyordu)
     products = (Array.isArray(products) ? products : []).map(p => ({
       ...p,
+      id: p.id || (Date.now().toString(36)+Math.random().toString(36).slice(2,6)),
+      name: String(p.name || '').trim() || 'İsimsiz',
+      barcode: p.barcode != null ? String(p.barcode) : '',
       price: Number(p.price) || 0,
       stock: Math.max(0, parseInt(p.stock, 10) || 0)
     }));
@@ -157,7 +171,13 @@
     let audioCtx = null;
     let deletedSalesStack = [];
     let deletedVeresiyeStack = [];
+    let saleInProgress = false; // çift tıklama ile çift stok düşmesini engeller
 
+    function storageErrorToast(e){
+      if(e && (e.name === 'QuotaExceededError' || e.code === 22)){
+        toast('Depolama dolu! Eski satışları silin veya Excel yedek alıp temizleyin');
+      }
+    }
     function save(){
       try {
         // Kaydetmeden önce stok/fiyatı sayıya çevir
@@ -166,17 +186,17 @@
           p.stock = Math.max(0, parseInt(p.stock, 10) || 0);
         });
         localStorage.setItem('bf_stok', JSON.stringify(products));
-      } catch(e){ console.error('Stok kaydetme hatası', e); }
+      } catch(e){ console.error('Stok kaydetme hatası', e); storageErrorToast(e); }
     }
     function saveSales(){
       try { localStorage.setItem('bf_sales', JSON.stringify(salesHistory)); }
-      catch(e){ console.error('Satış kaydetme hatası', e); }
+      catch(e){ console.error('Satış kaydetme hatası', e); storageErrorToast(e); }
     }
     function saveVeresiye(){
       try {
         mergeVeresiyeNames();
         localStorage.setItem('bf_veresiye', JSON.stringify(veresiye));
-      } catch(e){ console.error('Veresiye kaydetme hatası', e); }
+      } catch(e){ console.error('Veresiye kaydetme hatası', e); storageErrorToast(e); }
     }
     function saveAll(){
       save();
@@ -210,9 +230,17 @@
       veresiye = order.map(k=>map[k]);
     }
     function money(n){ return Number(n||0).toFixed(2).replace('.',',') + ' ₺'; }
+    function esc(s){
+      return String(s==null?'':s)
+        .replace(/&/g,'&amp;')
+        .replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;')
+        .replace(/'/g,'&#39;');
+    }
     function openPhoto(){ const el=document.getElementById('photoLightbox'); if(el){ el.style.display='flex'; } }
     function closePhoto(){ const el=document.getElementById('photoLightbox'); if(el){ el.style.display='none'; } }
-    function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); }
+    function toast(m){ const t=document.getElementById('toast'); if(!t) return; t.textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); }
     function id(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
 
     function personBalance(p){
@@ -335,15 +363,15 @@
     function filter(q){
       q=(q||'').toLowerCase();
       const list=document.getElementById('list');
-      const filtered=products.filter(p=>!q||p.name.toLowerCase().includes(q)||(p.barcode||'').includes(q));
+      const filtered=products.filter(p=>!q||(p.name||'').toLowerCase().includes(q)||(p.barcode||'').includes(q));
       filtered.sort((a,b)=>(a.name||'').localeCompare(b.name||'','tr',{sensitivity:'base'}));
       if(!filtered.length){ list.innerHTML=`<div class="empty">${products.length?'Sonuç yok':'Henüz ürün yok'} </div>`; return; }
       list.innerHTML=filtered.map(p=>{
         const stok = Math.max(0, parseInt(p.stock, 10) || 0);
         const sc = stok<=0 ? 'stock-zero' : stok<=5 ? 'stock-low' : 'stock-ok';
         const st = stok<=0 ? 'Stok yok' : stok + ' adet';
-        return `<div class="card" onclick="openModal('${p.id}')">
-          <div><h3>${p.name}</h3><div class="meta">${p.barcode||'Barkod yok'}</div></div>
+        return `<div class="card" onclick="openModal('${esc(p.id)}')">
+          <div><h3>${esc(p.name)}</h3><div class="meta">${esc(p.barcode||'Barkod yok')}</div></div>
           <div style="text-align:right"><div class="price">${money(p.price)}</div><div class="stock ${sc}">${st}</div></div></div>`;
       }).join('');
     }
@@ -356,7 +384,7 @@
       cartEl.innerHTML=cart.length===0?'<div class="empty">Sepet boş<br>Barkodu sarı çizgiye tut</div>':
         cart.map((i,idx)=>`
           <div class="cart-item">
-            <div><strong>${i.name}</strong><br><small style="color:var(--muted)">${money(i.price)} × ${i.qty}</small></div>
+            <div><strong>${esc(i.name)}</strong><br><small style="color:var(--muted)">${money(i.price)} × ${i.qty}</small></div>
             <div style="display:flex;align-items:center;gap:7px">
               <button class="btn btn-secondary" style="padding:6px 11px" onclick="chg(${idx},-1)">−</button>
               <span style="min-width:20px;text-align:center;font-weight:600">${i.qty}</span>
@@ -393,17 +421,51 @@
       });
       save();
     }
+    // Satış silinince / geri alınınca stok düzeltmesi
+    // Sadece gerçek ürün satışlarında (elle giriş ve veresiye tahsilatı hariç)
+    function adjustStockFromSaleItems(items, direction){
+      // direction: -1 = stok düş, +1 = stok geri ekle
+      if(!Array.isArray(items)) return;
+      items.forEach(it=>{
+        if(!it) return;
+        // id varsa id ile, yoksa isim ile eşle
+        let p = it.id ? products.find(x=>x.id===it.id) : null;
+        if(!p && it.name){
+          p = products.find(x=>normName(x.name).toLocaleLowerCase('tr')===normName(it.name).toLocaleLowerCase('tr'));
+        }
+        if(!p) return;
+        const qty = Math.max(0, parseInt(it.qty, 10) || 0);
+        const stok = Math.max(0, parseInt(p.stock, 10) || 0);
+        p.stock = Math.max(0, stok + (direction * qty));
+      });
+      save();
+    }
+    function saleAffectsStock(s){
+      // Elle satış ve veresiye tahsilatı stok düşürmemişti
+      return s && !s.manual && !s.fromVeresiye;
+    }
 
     function finishSale(){
-      if(!cart.length) return;
-      const total=cart.reduce((s,i)=>s+i.price*i.qty,0);
-      salesHistory.unshift({id:id(),date:new Date().toISOString(),total,items:cart.map(i=>({name:i.name,qty:i.qty,price:i.price}))});
-      saveSales();
-      deductStock();
-      cart=[];
-      updateCartUI();
-      saleSuccessSound();
-      toast('Satış tamamlandı · '+money(total));
+      if(!cart.length || saleInProgress) return;
+      saleInProgress = true;
+      try {
+        const total=cart.reduce((s,i)=>s+i.price*i.qty,0);
+        // id'yi de kaydet ki silince stok doğru geri eklensin
+        salesHistory.unshift({
+          id:id(),
+          date:new Date().toISOString(),
+          total,
+          items:cart.map(i=>({id:i.id, name:i.name, qty:i.qty, price:i.price}))
+        });
+        saveSales();
+        deductStock();
+        cart=[];
+        updateCartUI();
+        saleSuccessSound();
+        toast('Satış tamamlandı · '+money(total));
+      } finally {
+        setTimeout(()=>{ saleInProgress = false; }, 600);
+      }
     }
 
     // ===== VERESİYE =====
@@ -427,21 +489,29 @@
     }
 
     function confirmVeresiye(){
+      if(saleInProgress) return;
       const name=normName(document.getElementById('vName').value||'');
       if(!name){ toast('Müşteri adı gerekli'); return; }
-      const total=cart.reduce((s,i)=>s+i.price*i.qty,0);
-      const entry={id:id(),date:new Date().toISOString(),total,items:cart.map(i=>({name:i.name,qty:i.qty,price:i.price})),paid:false};
-      mergeVeresiyeNames();
-      let person=veresiye.find(v=>normName(v.name).toLocaleLowerCase('tr')===name.toLocaleLowerCase('tr'));
-      if(!person){ person={id:id(),name,entries:[]}; veresiye.unshift(person); }
-      person.entries.unshift(entry);
-      saveVeresiye();
-      deductStock();
-      cart=[];
-      closeModal();
-      updateCartUI();
-      saleSuccessSound();
-      toast('Veresiye yazıldı · '+name+' · '+money(total));
+      if(!cart.length){ toast('Sepet boş'); return; }
+      saleInProgress = true;
+      try {
+        const total=cart.reduce((s,i)=>s+i.price*i.qty,0);
+        // Ürün id'sini de sakla (ileride stok düzeltmesi için)
+        const entry={id:id(),date:new Date().toISOString(),total,items:cart.map(i=>({id:i.id,name:i.name,qty:i.qty,price:i.price})),paid:false};
+        mergeVeresiyeNames();
+        let person=veresiye.find(v=>normName(v.name).toLocaleLowerCase('tr')===name.toLocaleLowerCase('tr'));
+        if(!person){ person={id:id(),name,entries:[]}; veresiye.unshift(person); }
+        person.entries.unshift(entry);
+        saveVeresiye();
+        deductStock();
+        cart=[];
+        closeModal();
+        updateCartUI();
+        saleSuccessSound();
+        toast('Veresiye yazıldı · '+name+' · '+money(total));
+      } finally {
+        setTimeout(()=>{ saleInProgress = false; }, 600);
+      }
     }
 
     function openManualVeresiye(){
@@ -569,11 +639,17 @@
         const idx=(p.entries||[]).findIndex(x=>String(x.id)===String(eid));
         if(idx<0){ toast('Kayıt bulunamadı'); return; }
         if(!confirm('Bu veresiye kaydı silinsin mi?')) return;
-        deletedVeresiyeStack.push({type:'entry',personId:pid,entry:p.entries[idx]});
+        const entry = p.entries[idx];
+        deletedVeresiyeStack.push({type:'entry',personId:pid,entry:entry});
         p.entries.splice(idx,1);
+        // Ödenmemiş ve stok düşülmüş veresiyeyi silince stoku geri ekle
+        // (elle borç / zaten ödenmiş kayıt stok düşürmemişti veya tahsilatta zaten düşmüştü)
+        if(entry && !entry.paid && !entry.manual){
+          adjustStockFromSaleItems(entry.items, +1);
+        }
         saveVeresiye();
         renderVeresiye();
-        toast('Kayıt silindi');
+        toast('Kayıt silindi' + (entry && !entry.paid && !entry.manual ? ' · Stok geri eklendi' : ''));
       }catch(err){ console.error(err); toast('Silinemedi'); }
     }
 
@@ -657,12 +733,18 @@
       if(!e) return;
       const items = (window._editVItems||[])
         .map(it => ({
+          id: it.id || undefined,
           name: String(it.name||'').trim() || 'Ürün',
           qty: Math.max(1, parseInt(it.qty)||1),
           price: Math.max(0, parseFloat(it.price)||0)
         }))
         .filter(it => it.name);
       if(!items.length){ toast('En az bir ürün gerekli'); return; }
+      // Ödenmemiş ve stok düşülmüş kayıtta adet değişince stoku dengele
+      if(!e.paid && !e.manual){
+        adjustStockFromSaleItems(e.items || [], +1); // eskiyi geri ekle
+        adjustStockFromSaleItems(items, -1);         // yeniyi düş
+      }
       e.items = items;
       e.total = items.reduce((s,it)=>s+it.price*it.qty, 0);
       saveVeresiye();
@@ -763,9 +845,16 @@
       if(pid===undefined || pid===null || pid===''){ toast('Kişi yok'); return; }
       const idx = veresiye.findIndex(x => String(x.id)===String(pid));
       if(idx < 0){ toast('Kişi bulunamadı'); return; }
-      const nm = veresiye[idx].name || 'Kişi';
+      const person = veresiye[idx];
+      const nm = person.name || 'Kişi';
       // Kaydırarak silmede onay yok (Geri Al var). Butona basınca da direkt sil.
-      deletedVeresiyeStack.push({type:'person', person: veresiye[idx]});
+      deletedVeresiyeStack.push({type:'person', person: person});
+      // Ödenmemiş ve stok düşülmüş kayıtların stokunu geri ekle
+      (person.entries||[]).forEach(entry=>{
+        if(entry && !entry.paid && !entry.manual){
+          adjustStockFromSaleItems(entry.items, +1);
+        }
+      });
       veresiye.splice(idx, 1);
       saveVeresiye();
       renderVeresiye();
@@ -916,10 +1005,24 @@
     function undoVeresiye(){
       if(!deletedVeresiyeStack.length) return;
       const u=deletedVeresiyeStack.pop();
-      if(u.type==='person'){ veresiye.unshift(u.person); }
-      else if(u.type==='entry'){
+      if(u.type==='person'){
+        veresiye.unshift(u.person);
+        // Geri alınca stoku tekrar düş (ödenmemiş, elle olmayan kayıtlar)
+        (u.person.entries||[]).forEach(entry=>{
+          if(entry && !entry.paid && !entry.manual){
+            adjustStockFromSaleItems(entry.items, -1);
+          }
+        });
+      } else if(u.type==='entry'){
         const p=veresiye.find(x=>x.id===u.personId);
         if(p) p.entries.unshift(u.entry);
+        else {
+          // Kişi silinmişse geçici kişi oluştur
+          veresiye.unshift({id:u.personId, name:'(Geri alınan)', entries:[u.entry]});
+        }
+        if(u.entry && !u.entry.paid && !u.entry.manual){
+          adjustStockFromSaleItems(u.entry.items, -1);
+        }
       }
       saveVeresiye();
       renderVeresiye();
@@ -999,14 +1102,25 @@
     }
     function deleteSale(sid){
       const idx=salesHistory.findIndex(s=>s.id===sid); if(idx<0) return;
-      deletedSalesStack.push(salesHistory.splice(idx,1)[0]);
-      saveSales(); renderSalesSheet(); toast('Satış silindi');
+      if(!confirm('Bu satış silinsin mi?')) return;
+      const removed = salesHistory.splice(idx,1)[0];
+      deletedSalesStack.push(removed);
+      // Gerçek satışsa stoku geri ekle (elle / veresiye tahsilatı stok düşürmemişti)
+      if(saleAffectsStock(removed)){
+        adjustStockFromSaleItems(removed.items, +1);
+      }
+      saveSales(); renderSalesSheet(); toast('Satış silindi' + (saleAffectsStock(removed) ? ' · Stok geri eklendi' : ''));
     }
     function undoDeleteSale(){
       if(!deletedSalesStack.length) return;
-      salesHistory.push(deletedSalesStack.pop());
+      const restored = deletedSalesStack.pop();
+      salesHistory.push(restored);
       salesHistory.sort((a,b)=>new Date(b.date)-new Date(a.date));
-      saveSales(); renderSalesSheet(); toast('Geri alındı');
+      // Geri alınca stoku tekrar düş (sadece gerçek satışlarda)
+      if(saleAffectsStock(restored)){
+        adjustStockFromSaleItems(restored.items, -1);
+      }
+      saveSales(); renderSalesSheet(); toast('Geri alındı' + (saleAffectsStock(restored) ? ' · Stok düşüldü' : ''));
     }
     function closeSales(){ const c=document.getElementById('salesContent'); if(c) c.classList.remove('expanded'); document.getElementById('salesSheet').classList.remove('show'); if(tab==='sales') startLiveScanner(); }
 
@@ -1410,7 +1524,18 @@
       products.sort((a,b)=>(a.name||'').localeCompare(b.name||'','tr',{sensitivity:'base'}));
       save(); closeModal(); render(); toast(editId?'Güncellendi':'Eklendi');
     }
-    function delProduct(){ if(!confirm('Silinsin mi?')) return; products=products.filter(p=>p.id!==editId); save(); closeModal(); render(); toast('Silindi'); }
+    function delProduct(){
+      if(!confirm('Silinsin mi?')) return;
+      const removedId = editId;
+      products = products.filter(p=>p.id!==removedId);
+      // Sepetteki aynı ürünü de temizle (hayalet satır kalmasın)
+      cart = cart.filter(c=>c.id!==removedId);
+      save();
+      closeModal();
+      render();
+      updateCartUI();
+      toast('Silindi');
+    }
     function closeModal(){ stopProductScan(); document.getElementById('modalBg').classList.remove('show'); if(tab==='sales') startLiveScanner(); }
 
     function openToplam(){ hideDataMenu();
