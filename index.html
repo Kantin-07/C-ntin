@@ -141,6 +141,14 @@
     let salesHistory = JSON.parse(localStorage.getItem('bf_sales') || '[]');
     let veresiye = JSON.parse(localStorage.getItem('bf_veresiye') || '[]'); // {id, name, entries:[{id,date,total,items,paid}], deleted?}
     // isimler birleştirilecek init'te
+    // Stok/fiyat her zaman sayı olsun (string gelirse "Stok yok" hatası oluşuyordu)
+    products = (Array.isArray(products) ? products : []).map(p => ({
+      ...p,
+      price: Number(p.price) || 0,
+      stock: Math.max(0, parseInt(p.stock, 10) || 0)
+    }));
+    salesHistory = Array.isArray(salesHistory) ? salesHistory : [];
+    veresiye = Array.isArray(veresiye) ? veresiye : [];
     let cart = [];
     let tab = 'sales';
     let liveScanner = null;
@@ -150,9 +158,31 @@
     let deletedSalesStack = [];
     let deletedVeresiyeStack = [];
 
-    function save(){ localStorage.setItem('bf_stok', JSON.stringify(products)); }
-    function saveSales(){ localStorage.setItem('bf_sales', JSON.stringify(salesHistory)); }
-    function saveVeresiye(){ mergeVeresiyeNames(); localStorage.setItem('bf_veresiye', JSON.stringify(veresiye)); }
+    function save(){
+      try {
+        // Kaydetmeden önce stok/fiyatı sayıya çevir
+        products.forEach(p => {
+          p.price = Number(p.price) || 0;
+          p.stock = Math.max(0, parseInt(p.stock, 10) || 0);
+        });
+        localStorage.setItem('bf_stok', JSON.stringify(products));
+      } catch(e){ console.error('Stok kaydetme hatası', e); }
+    }
+    function saveSales(){
+      try { localStorage.setItem('bf_sales', JSON.stringify(salesHistory)); }
+      catch(e){ console.error('Satış kaydetme hatası', e); }
+    }
+    function saveVeresiye(){
+      try {
+        mergeVeresiyeNames();
+        localStorage.setItem('bf_veresiye', JSON.stringify(veresiye));
+      } catch(e){ console.error('Veresiye kaydetme hatası', e); }
+    }
+    function saveAll(){
+      save();
+      saveSales();
+      saveVeresiye();
+    }
     function normName(n){ return String(n||'').trim().replace(/\s+/g,' '); }
     function mergeVeresiyeNames(){
       const map = {};
@@ -309,8 +339,9 @@
       filtered.sort((a,b)=>(a.name||'').localeCompare(b.name||'','tr',{sensitivity:'base'}));
       if(!filtered.length){ list.innerHTML=`<div class="empty">${products.length?'Sonuç yok':'Henüz ürün yok'} </div>`; return; }
       list.innerHTML=filtered.map(p=>{
-        const sc=p.stock<=0?'stock-zero':p.stock<=5?'stock-low':'stock-ok';
-        const st=p.stock<=0?'Stok yok':p.stock+' adet';
+        const stok = Math.max(0, parseInt(p.stock, 10) || 0);
+        const sc = stok<=0 ? 'stock-zero' : stok<=5 ? 'stock-low' : 'stock-ok';
+        const st = stok<=0 ? 'Stok yok' : stok + ' adet';
         return `<div class="card" onclick="openModal('${p.id}')">
           <div><h3>${p.name}</h3><div class="meta">${p.barcode||'Barkod yok'}</div></div>
           <div style="text-align:right"><div class="price">${money(p.price)}</div><div class="stock ${sc}">${st}</div></div></div>`;
@@ -345,8 +376,9 @@
       const item=cart[idx];
       const p=products.find(x=>x.id===item.id);
       const nq=item.qty+d;
+      const stok = p ? Math.max(0, parseInt(p.stock, 10) || 0) : 0;
       if(nq<1) cart.splice(idx,1);
-      else if(p&&nq>p.stock){ toast('Stok yetersiz'); return; }
+      else if(p && nq > stok){ toast('Stok yetersiz'); return; }
       else item.qty=nq;
       updateCartUI();
     }
@@ -354,7 +386,10 @@
     function deductStock(){
       cart.forEach(item=>{
         const p=products.find(x=>x.id===item.id);
-        if(p) p.stock=Math.max(0,(p.stock||0)-item.qty);
+        if(p){
+          const stok = Math.max(0, parseInt(p.stock, 10) || 0);
+          p.stock = Math.max(0, stok - (item.qty || 0));
+        }
       });
       save();
     }
@@ -1220,14 +1255,21 @@
     }
     function manualSales(){ const code=prompt('Barkodu girin:'); if(code) onBarcodeDetected(code.trim()); }
     function addCart(p){
-      if(p.stock<=0){
+      // Stok her zaman sayı olarak kontrol edilsin
+      const stok = Math.max(0, parseInt(p.stock, 10) || 0);
+      p.stock = stok; // bellekte de düzelt
+      if(stok <= 0){
         toast('Stok bitmiş · Stok girişi için açılıyor');
         openModal(p.id);
         return;
       }
-      const ex=cart.find(c=>c.id===p.id);
-      if(ex){ if(ex.qty>=p.stock){toast('Stok yetersiz · Stok güncelle'); openModal(p.id); return;} ex.qty++; }
-      else cart.push({id:p.id,name:p.name,price:p.price,qty:1});
+      const ex = cart.find(c => c.id === p.id);
+      if(ex){
+        if(ex.qty >= stok){ toast('Stok yetersiz · Stok güncelle'); openModal(p.id); return; }
+        ex.qty++;
+      } else {
+        cart.push({id:p.id, name:p.name, price:Number(p.price)||0, qty:1});
+      }
       updateCartUI();
     }
 
@@ -1362,7 +1404,7 @@
       const name=document.getElementById('n').value.trim(); if(!name){toast('Ürün adı gerekli');return;}
       const barcode=document.getElementById('b').value.trim();
       const price=parseFloat(document.getElementById('pr').value)||0;
-      const stock=parseInt(document.getElementById('st').value)||0;
+      const stock=Math.max(0, parseInt(document.getElementById('st').value, 10) || 0);
       if(editId){ const p=products.find(x=>x.id===editId); p.name=name;p.barcode=barcode;p.price=price;p.stock=stock; }
       else products.push({id:id(),name,barcode,price,stock});
       products.sort((a,b)=>(a.name||'').localeCompare(b.name||'','tr',{sensitivity:'base'}));
@@ -1579,11 +1621,11 @@
               barcode=String(cols[0]||'').trim();
               pname=String(cols[1]||'').trim();
               price=parseFloat(String(cols[2]).replace(',','.'))||0;
-              stock=parseInt(cols[3])||0;
+              stock=Math.max(0, parseInt(cols[3], 10) || 0);
             } else {
               pname=String(cols[0]||'').trim();
               price=parseFloat(String(cols[1]).replace(',','.'))||0;
-              stock=parseInt(cols[2])||0;
+              stock=Math.max(0, parseInt(cols[2], 10) || 0);
             }
             if(!pname) continue;
             let existing=null;
@@ -1609,8 +1651,21 @@
     document.getElementById('veresiyeSheet').onclick=e=>{if(e.target.id==='veresiyeSheet') closeVeresiye();};
     document.getElementById('toplamSheet').onclick=e=>{if(e.target.id==='toplamSheet') closeToplam();};
     document.getElementById('modalBg').onclick=e=>{if(e.target.id==='modalBg') closeModal();};
-    window.addEventListener('beforeunload', stopLiveScanner);
-    try{ mergeVeresiyeNames(); saveVeresiye(); }catch(e){}
+    // Sayfa kapanırken / arka plana giderken her şeyi kaydet
+    function onPageExit(){
+      try {
+        stopLiveScanner();
+        saveAll();
+      } catch(e){}
+    }
+    window.addEventListener('beforeunload', onPageExit);
+    window.addEventListener('pagehide', onPageExit);
+    document.addEventListener('visibilitychange', function(){
+      if(document.visibilityState === 'hidden') onPageExit();
+    });
+    // iOS Safari için ekstra
+    window.addEventListener('freeze', onPageExit);
+    try{ mergeVeresiyeNames(); saveVeresiye(); save(); }catch(e){}
     render();
   </script>
 </body>
