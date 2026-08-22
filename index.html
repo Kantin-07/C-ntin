@@ -74,8 +74,8 @@
   .day-header{font-weight:600;font-size:.85rem;color:var(--muted);margin:10px 0 6px;padding:8px 10px;background:var(--bg);border-radius:10px;border:1px solid var(--border);display:flex;justify-content:space-between;cursor:pointer}
   .sale-item{background:#f8fafc;border-radius:10px;padding:11px 13px;margin-bottom:6px;border:1px solid #e2e8f0;color:#0f172a}
   .scanner-wrap{background:#000;border-radius:16px;overflow:hidden;margin-bottom:12px;position:relative;height:260px}
-  #liveScanner{width:100%;height:100%}
-  #liveScanner video{object-fit:cover !important;width:100% !important;height:100% !important}
+  #liveScanner,#listScanner{width:100%;height:100%}
+  #liveScanner video,#listScanner video{object-fit:cover !important;width:100% !important;height:100% !important;display:block !important}
   #productScanner{width:100% !important;height:260px !important}
   #productScanner video{object-fit:cover !important;width:100% !important;height:260px !important;display:block !important}
   #productScanner img{display:none !important}
@@ -384,7 +384,7 @@
             <div class="summary-box"><div class="lbl">Veresiye Bakiye</div><div class="val" style="color:#fbbf24">${money(totalVeresiye())}</div></div>
           </div>
           ${lowStock||zeroStock?`<div class="low-stock-hint">⚠ ${zeroStock?zeroStock+' üründe stok yok':''}${zeroStock&&lowStock?' · ':''}${lowStock?lowStock+' üründe stok az (≤5)':''}</div>`:''}
-          <div class="scanner-wrap" id="listScannerWrap" style="height:200px;margin-bottom:10px">
+          <div class="scanner-wrap" id="listScannerWrap" style="height:260px;margin-bottom:10px">
             <div id="listScanner"></div>
             <div class="scan-line"></div>
             <div class="scanner-status" id="listScanStatus">Ürün bulmak için barkodu tutun</div>
@@ -1367,21 +1367,22 @@
     let listScanner = null;
     let listLastCode = '', listLastScanTime = 0;
     function stopListScanner(){
-      if(!listScanner) return;
+      const btn = document.getElementById('listCamBtn');
+      if(btn) btn.remove();
+      if(!listScanner){
+        const el = document.getElementById('listScanner');
+        if(el) el.innerHTML = '';
+        return;
+      }
       const sc = listScanner;
       listScanner = null;
       try {
-        if (typeof sc.getState === 'function') {
-          const state = sc.getState();
-          if (state === 2 || state === 3) {
-            sc.stop().catch(()=>{}).finally(()=>{
-              const el = document.getElementById('listScanner');
-              if(el) el.innerHTML = '';
-            });
-            return;
-          }
-        } else {
-          sc.stop().catch(()=>{});
+        if(typeof sc.stop === 'function'){
+          sc.stop().catch(()=>{}).finally(()=>{
+            const el = document.getElementById('listScanner');
+            if(el) el.innerHTML = '';
+          });
+          return;
         }
       } catch(e) {}
       const el = document.getElementById('listScanner');
@@ -1395,13 +1396,18 @@
     }
     function onListBarcode(code){
       if(!code) return;
+      code = String(code).trim();
       const now = Date.now();
-      if(code === listLastCode && now - listLastScanTime < 1200) return;
+      if(code === listLastCode && now - listLastScanTime < 800) return;
       listLastCode = code;
       listLastScanTime = now;
       beep();
       const st = document.getElementById('listScanStatus');
-      const p = products.find(x => String(x.barcode||'') === String(code));
+      const norm = (b) => String(b||'').trim().replace(/^0+/, '') || '0';
+      const p = products.find(x => {
+        const pb = String(x.barcode||'').trim();
+        return pb === code || norm(pb) === norm(code);
+      });
       if(p){
         if(st){ st.textContent = '✓ ' + (p.name||'Bulundu'); st.classList.add('active'); }
         toast('Bulundu: ' + p.name);
@@ -1416,7 +1422,7 @@
       }
       if(st){ st.textContent = 'Kayıtlı değil: ' + code; st.classList.remove('active'); }
       stopListScanner();
-      if(confirm('"' + code + '" kayıtlı değil.\\nYeni ürün ekle?')){
+      if(confirm('"' + code + '" kayıtlı değil.\nYeni ürün ekle?')){
         openModal();
         setTimeout(()=>{
           const b=document.getElementById('b');
@@ -1430,57 +1436,132 @@
       if(tab !== 'list') return;
       const st = document.getElementById('listScanStatus');
       const box = document.getElementById('listScanner');
+      const wrap = document.getElementById('listScannerWrap');
       if(!box) return;
       if(location.protocol === 'file:'){ if(st) st.textContent = 'HTTPS gerekli'; return; }
-      if(typeof Html5Qrcode === 'undefined'){ if(st) st.textContent = 'Kütüphane yükleniyor...'; setTimeout(startListScanner, 500); return; }
-      stopListScanner();
-      const cfg = {
-        fps: 24,
-        qrbox: (w,h)=>({ width: Math.floor(w*0.92), height: Math.floor(Math.min(h*0.55, 160)) }),
-        aspectRatio: 1.777,
-        disableFlip: true,
-        videoConstraints: {
-          facingMode: { ideal: 'environment' },
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        },
-        formatsToSupport: [
-          Html5QrcodeSupportedFormats.EAN_13,
-          Html5QrcodeSupportedFormats.EAN_8,
-          Html5QrcodeSupportedFormats.UPC_A,
-          Html5QrcodeSupportedFormats.UPC_E,
-          Html5QrcodeSupportedFormats.CODE_128,
-          Html5QrcodeSupportedFormats.CODE_39,
-          Html5QrcodeSupportedFormats.ITF,
-          Html5QrcodeSupportedFormats.CODABAR
-        ],
-        experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+      if(typeof Html5Qrcode === 'undefined'){ if(st) st.textContent = 'Kütüphane yükleniyor...'; setTimeout(startListScanner, 600); return; }
+
+      // Önceki tarayıcıyı temizle (async stop bitmeden yeniden başlatma)
+      const begin = () => {
+        try { box.innerHTML = ''; } catch(e){}
+        if(st){ st.textContent = 'Kamera açılıyor...'; st.classList.remove('active'); }
+
+        const cfg = {
+          fps: 30,
+          qrbox: (w, h) => {
+            const width = Math.floor(Math.min(w * 0.94, w - 16));
+            const height = Math.floor(Math.min(h * 0.5, 140));
+            return { width: Math.max(120, width), height: Math.max(60, height) };
+          },
+          aspectRatio: 1.777,
+          disableFlip: true,
+          videoConstraints: {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1920, max: 1920 },
+            height: { ideal: 1080, max: 1080 },
+            frameRate: { ideal: 30, max: 30 }
+          },
+          experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+        };
+        // Desteklenen formatlar (varsa)
+        try {
+          if(typeof Html5QrcodeSupportedFormats !== 'undefined'){
+            cfg.formatsToSupport = [
+              Html5QrcodeSupportedFormats.EAN_13,
+              Html5QrcodeSupportedFormats.EAN_8,
+              Html5QrcodeSupportedFormats.UPC_A,
+              Html5QrcodeSupportedFormats.UPC_E,
+              Html5QrcodeSupportedFormats.CODE_128,
+              Html5QrcodeSupportedFormats.CODE_39,
+              Html5QrcodeSupportedFormats.ITF,
+              Html5QrcodeSupportedFormats.CODABAR
+            ];
+          }
+        } catch(e){}
+
+        const onReady = () => {
+          if(st) st.textContent = 'Barkodu sarı çizgiye tut';
+          setTimeout(() => {
+            const vid = box.querySelector('video');
+            if(vid){
+              vid.style.width = '100%';
+              vid.style.height = '100%';
+              vid.style.objectFit = 'cover';
+              vid.style.display = 'block';
+            }
+            // tarama kutusunun border gürültüsünü kaldır
+            box.querySelectorAll('div').forEach(d => {
+              try { if(d.style) d.style.border = 'none'; } catch(e){}
+            });
+          }, 400);
+        };
+
+        const startWith = (cam) => {
+          try {
+            listScanner = new Html5Qrcode('listScanner', { verbose: false });
+            return listScanner.start(cam, cfg, onListBarcode, () => {}).then(onReady);
+          } catch(err){
+            console.error(err);
+            if(st) st.textContent = 'Kamera başlatılamadı · Tara\'ya basın';
+            return Promise.reject(err);
+          }
+        };
+
+        const showRetry = (msg) => {
+          if(st) st.textContent = msg || 'İzin verin · Tara butonuna basın';
+          // Yeniden dene butonu ekle
+          if(wrap && !document.getElementById('listCamBtn')){
+            const btn = document.createElement('button');
+            btn.id = 'listCamBtn';
+            btn.className = 'btn btn-primary';
+            btn.style.cssText = 'position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:10;padding:14px 24px';
+            btn.textContent = '📷 Kamerayı Aç';
+            btn.onclick = (e) => { e.preventDefault(); btn.remove(); restartListScanner(); };
+            wrap.appendChild(btn);
+          }
+        };
+
+        if(navigator.mediaDevices && navigator.mediaDevices.getUserMedia){
+          navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+            .then(tmp => {
+              tmp.getTracks().forEach(t => t.stop());
+              return Html5Qrcode.getCameras();
+            })
+            .then(cams => {
+              if(!cams || !cams.length) return startWith({ facingMode: 'environment' });
+              const score = (label) => {
+                const l = (label || '').toLowerCase();
+                if(/front|ön|user|selfie/i.test(l)) return -1000;
+                let s = 0;
+                if(/back|arka|rear|environment/i.test(l)) s += 50;
+                if(/wide|geniş|main|ana/i.test(l) && !/ultra/i.test(l)) s += 40;
+                return s;
+              };
+              let best = cams[0], bestS = -9999;
+              cams.forEach(c => { const sc = score(c.label); if(sc > bestS){ bestS = sc; best = c; } });
+              if(st) st.textContent = 'Kamera: ' + ((best && best.label) || 'arka');
+              return startWith(best.id);
+            })
+            .catch(() => {
+              startWith({ facingMode: 'environment' }).catch(() => showRetry('İzin verin · Tara butonuna basın'));
+            });
+        } else {
+          startWith({ facingMode: 'environment' }).catch(() => showRetry());
+        }
       };
-      const startWith = (cam) => {
-        listScanner = new Html5Qrcode('listScanner', { verbose: false });
-        return listScanner.start(cam, cfg, onListBarcode, ()=>{}).then(()=>{
-          if(st) st.textContent = 'Barkodu sarı çizgiye tut · Ürün bulunur';
-        });
-      };
-      const showRetry = (msg) => {
-        if(st) st.textContent = msg || 'Kamera izni gerekli · Tara butonuna basın';
-      };
-      if(navigator.mediaDevices && navigator.mediaDevices.getUserMedia){
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
-          .then(tmp => {
-            tmp.getTracks().forEach(t => t.stop());
-            return Html5Qrcode.getCameras();
-          })
-          .then(cams => {
-            if(!cams || !cams.length) return startWith({ facingMode: 'environment' });
-            const back = cams.find(c => /back|arka|rear|environment/i.test(c.label||'')) || cams[0];
-            return startWith(back.id);
-          })
-          .catch(() => {
-            startWith({ facingMode: 'environment' }).catch(() => showRetry('İzin verin · Tara butonuna basın'));
-          });
+
+      // stop bitmesini bekle
+      if(listScanner){
+        const sc = listScanner;
+        listScanner = null;
+        const finish = () => { try { box.innerHTML = ''; } catch(e){} begin(); };
+        try {
+          if(typeof sc.stop === 'function'){
+            sc.stop().then(finish).catch(finish);
+          } else finish();
+        } catch(e){ finish(); }
       } else {
-        startWith({ facingMode: 'environment' }).catch(() => showRetry());
+        begin();
       }
     }
 
