@@ -8,7 +8,9 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
 <title>KANTİN</title>
 <style>
   :root {
@@ -70,7 +72,7 @@
   .sheet-handle{width:42px;height:5px;background:var(--border);border-radius:4px;margin:6px auto 12px;flex-shrink:0}
   .month-header{background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;padding:11px 14px;border-radius:11px;margin:14px 0 8px;font-weight:700;display:flex;justify-content:space-between;cursor:pointer}
   .day-header{font-weight:600;font-size:.85rem;color:var(--muted);margin:10px 0 6px;padding:8px 10px;background:var(--bg);border-radius:10px;border:1px solid var(--border);display:flex;justify-content:space-between;cursor:pointer}
-  .sale-item{background:var(--bg);border-radius:10px;padding:11px 13px;margin-bottom:6px;border:1px solid var(--border);color:var(--text)}
+  .sale-item{background:#f8fafc;border-radius:10px;padding:11px 13px;margin-bottom:6px;border:1px solid #e2e8f0;color:#0f172a}
   .scanner-wrap{background:#000;border-radius:16px;overflow:hidden;margin-bottom:12px;position:relative;height:260px}
   #liveScanner{width:100%;height:100%}
   #liveScanner video{object-fit:cover !important;width:100% !important;height:100% !important}
@@ -100,8 +102,6 @@
   .guide-box p{color:var(--muted);font-size:.88rem;margin-bottom:12px;line-height:1.45}
   .manual-row{display:flex;gap:8px;margin-bottom:10px}
   .manual-row input{flex:1;padding:12px 14px;border:1px solid var(--border);border-radius:12px;font-size:1rem;background:var(--card);color:var(--text);outline:none}
-  .change-box{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:12px;margin:10px 0}
-  .change-box .row{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
   .low-stock-hint{font-size:.75rem;color:#facc15;margin-top:4px}
 
 </style>
@@ -458,11 +458,6 @@
       if(extra){
         extra.innerHTML=cart.length?`
           <div class="cart-total">${money(total)}</div>
-          <div class="change-box">
-            <label style="font-size:.8rem;color:var(--muted);font-weight:600">Alınan tutar (para üstü için, isteğe bağlı)</label>
-            <input id="cashReceived" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Örn: 100" style="width:100%;margin-top:6px;padding:12px;border:1px solid var(--border);border-radius:11px;font-size:1rem;background:var(--card);color:var(--text);outline:none" oninput="updateChangeUI(${total})">
-            <div class="row"><span style="color:var(--muted)">Para üstü</span><strong id="changeAmount" style="color:#4ade80">—</strong></div>
-          </div>
           <button class="btn btn-success btn-block" onclick="finishSale()">Satışı Tamamla</button>
           <button class="btn btn-warn btn-block" style="margin-top:8px" onclick="openVeresiyeFromCart()">Veresiye Yaz</button>`:'';
       }
@@ -513,52 +508,30 @@
       return s && !s.manual && !s.fromVeresiye;
     }
 
-    function updateChangeUI(total){
-      const el = document.getElementById('changeAmount');
-      const inp = document.getElementById('cashReceived');
-      if(!el || !inp) return;
-      const received = parseFloat(String(inp.value).replace(',','.'));
-      if(!isFinite(received) || received <= 0){ el.textContent = '—'; el.style.color = '#4ade80'; return; }
-      const change = received - total;
-      if(change < 0){ el.textContent = 'Eksik: ' + money(Math.abs(change)); el.style.color = '#f87171'; }
-      else { el.textContent = money(change); el.style.color = '#4ade80'; }
-    }
     function finishSale(){
       if(!cart.length || saleInProgress) return;
-      // Stok kontrolü: sepet miktarı mevcut stoku aşmasın
+      // Stok kontrolü
       for(const item of cart){
         const p = products.find(x => x.id === item.id);
         const stok = p ? Math.max(0, parseInt(p.stock, 10) || 0) : 0;
         if(!p){ toast('Ürün bulunamadı: ' + (item.name||'')); return; }
         if(item.qty > stok){ toast('Stok yetersiz: ' + p.name + ' (stok: ' + stok + ')'); return; }
       }
-      const total=cart.reduce((s,i)=>s+i.price*i.qty,0);
-      const cashEl = document.getElementById('cashReceived');
-      let received = cashEl ? parseFloat(String(cashEl.value).replace(',','.')) : NaN;
-      if(isFinite(received) && received > 0 && received < total){
-        if(!confirm('Alınan tutar toplamdan düşük. Yine de tamamla?')) return;
-      }
       saleInProgress = true;
       try {
-        const sale = {
+        const total=cart.reduce((s,i)=>s+i.price*i.qty,0);
+        salesHistory.unshift({
           id:id(),
           date:new Date().toISOString(),
           total,
           items:cart.map(i=>({id:i.id, name:i.name, qty:i.qty, price:i.price}))
-        };
-        if(isFinite(received) && received > 0){
-          sale.cashReceived = received;
-          sale.change = Math.max(0, received - total);
-        }
-        salesHistory.unshift(sale);
+        });
         saveSales();
         deductStock();
         cart=[];
         updateCartUI();
         saleSuccessSound();
-        let msg = 'Satış tamamlandı · ' + money(total);
-        if(sale.change != null) msg += ' · Üstü ' + money(sale.change);
-        toast(msg);
+        toast('Satış tamamlandı · '+money(total));
       } finally {
         setTimeout(()=>{ saleInProgress = false; }, 600);
       }
@@ -1181,8 +1154,9 @@
             html+=`<div class="sale-item">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
                 <span style="font-weight:600">${time}${tag}</span>
-                <div style="display:flex;align-items:center;gap:8px">
+                <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
                   <strong style="color:#1e40af">${money(s.total)}</strong>
+                  <button class="btn btn-secondary" style="padding:4px 10px;font-size:.78rem;color:#0f172a" onclick="editSale('${s.id}')">Düzenle</button>
                   <button class="btn btn-danger" style="padding:4px 10px;font-size:.78rem" onclick="deleteSale('${s.id}')">Sil</button>
                 </div>
               </div>${items||''}</div>`;
@@ -1201,6 +1175,104 @@
       const prev=el.previousElementSibling;
       if(prev){ const span=prev.querySelector('span'); if(span&&span.textContent){ span.textContent=open?span.textContent.replace('▾','▸'):span.textContent.replace('▸','▾'); } }
     }
+
+    // ===== SATIŞ DÜZENLE =====
+    function editSale(sid){
+      const s = salesHistory.find(x => String(x.id) === String(sid));
+      if(!s){ toast('Satış bulunamadı'); return; }
+      window._editSaleId = s.id;
+      window._editSaleItems = JSON.parse(JSON.stringify(
+        (s.items && s.items.length) ? s.items : [{name:'', qty:1, price:0}]
+      ));
+      document.getElementById('modal').innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <h2 style="margin:0">Satış Düzenle</h2>
+          <button class="btn btn-secondary" style="padding:6px 12px" onclick="closeModal()">Kapat</button>
+        </div>
+        <div class="meta" style="margin-bottom:10px">${s.manual?'Elle giriş':(s.fromVeresiye?'Veresiye tahsilat':'Nakit satış')} · ${new Date(s.date).toLocaleString('tr-TR')}</div>
+        <div id="editSaleItems"></div>
+        <button class="btn btn-secondary btn-block" style="margin:10px 0" onclick="addEditSaleItem()">+ Ürün Ekle</button>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:var(--bg);border-radius:10px;border:1px solid var(--border);margin-bottom:12px">
+          <strong>Toplam</strong>
+          <strong id="editSaleTotal" style="color:#60a5fa;font-size:1.15rem">0,00 ₺</strong>
+        </div>
+        <button class="btn btn-primary btn-block" onclick="saveEditedSale()">Kaydet</button>
+        <button class="btn btn-secondary btn-block" style="margin-top:8px" onclick="closeModal()">İptal</button>`;
+      document.getElementById('modalBg').classList.add('show');
+      renderEditSaleItems();
+    }
+    function renderEditSaleItems(){
+      const box = document.getElementById('editSaleItems');
+      if(!box || !window._editSaleItems) return;
+      box.innerHTML = window._editSaleItems.map((it, idx) => {
+        const n = String(it.name||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+        return `<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px">
+          <div class="form-group" style="margin-bottom:8px">
+            <label>Ürün</label>
+            <input value="${n}" oninput="window._editSaleItems[${idx}].name=this.value">
+          </div>
+          <div class="form-row">
+            <div class="form-group" style="margin-bottom:0">
+              <label>Adet</label>
+              <input type="number" min="1" step="1" value="${it.qty||1}" oninput="window._editSaleItems[${idx}].qty=parseInt(this.value)||1;updateEditSaleTotal()">
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label>Fiyat (₺)</label>
+              <input type="number" min="0" step="0.01" value="${it.price||0}" oninput="window._editSaleItems[${idx}].price=parseFloat(this.value)||0;updateEditSaleTotal()">
+            </div>
+          </div>
+          <button type="button" class="btn btn-danger" style="margin-top:8px;padding:6px 10px;font-size:.8rem" onclick="removeEditSaleItem(${idx})">Ürünü Kaldır</button>
+        </div>`;
+      }).join('');
+      updateEditSaleTotal();
+    }
+    function updateEditSaleTotal(){
+      const el = document.getElementById('editSaleTotal');
+      if(!el || !window._editSaleItems) return;
+      const t = window._editSaleItems.reduce((s,it)=>s+(Number(it.price)||0)*(Math.max(1,parseInt(it.qty)||1)),0);
+      el.textContent = money(t);
+    }
+    function addEditSaleItem(){
+      if(!window._editSaleItems) window._editSaleItems = [];
+      window._editSaleItems.push({name:'', qty:1, price:0});
+      renderEditSaleItems();
+    }
+    function removeEditSaleItem(idx){
+      if(!window._editSaleItems) return;
+      window._editSaleItems.splice(idx, 1);
+      if(!window._editSaleItems.length) window._editSaleItems.push({name:'', qty:1, price:0});
+      renderEditSaleItems();
+    }
+    function saveEditedSale(){
+      const sid = window._editSaleId;
+      const s = salesHistory.find(x => String(x.id) === String(sid));
+      if(!s){ toast('Satış bulunamadı'); return; }
+      const clean = (window._editSaleItems||[])
+        .map(it => ({
+          id: it.id || undefined,
+          name: String(it.name||'').trim(),
+          qty: Math.max(1, parseInt(it.qty)||1),
+          price: Math.max(0, parseFloat(it.price)||0)
+        }))
+        .filter(it => it.name);
+      if(!clean.length){ toast('En az bir ürün gerekli'); return; }
+      // Stok: eskiyi geri ekle, yeniyi düş (sadece stok etkileyen satışlarda)
+      if(saleAffectsStock(s)){
+        adjustStockFromSaleItems(s.items || [], +1);
+        adjustStockFromSaleItems(clean, -1);
+      }
+      s.items = clean;
+      s.total = clean.reduce((sum,it)=>sum + it.price * it.qty, 0);
+      // cash/change alanlarını temizle
+      delete s.cashReceived;
+      delete s.change;
+      saveSales();
+      closeModal();
+      renderSalesSheet();
+      if(tab==='list') render();
+      toast('Satış güncellendi · ' + money(s.total) + (saleAffectsStock(s) ? ' · Stok düzeltildi' : ''));
+    }
+
     function deleteSale(sid){
       const idx=salesHistory.findIndex(s=>s.id===sid); if(idx<0) return;
       if(!confirm('Bu satış silinsin mi?')) return;
