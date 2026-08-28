@@ -1736,7 +1736,13 @@
       beep();
       lastCode = code;
       lastScanTime = Date.now();
-      let p = products.find(x => x.barcode === code);
+      // Leading zero farkını yok say (ürünler sekmesiyle aynı mantık)
+      const norm = (b) => String(b || '').trim().replace(/^0+/, '') || '0';
+      const codeStr = String(code || '').trim();
+      let p = products.find(x => {
+        const pb = String(x.barcode || '').trim();
+        return pb === codeStr || norm(pb) === norm(codeStr);
+      });
       if(!p){
         // Bilinmeyen ürün: kamerayı durdur, sor
         stopLiveScanner();
