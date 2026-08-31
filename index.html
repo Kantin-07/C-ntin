@@ -2077,46 +2077,6 @@
       const kisi = veresiye.filter(v=>personBalance(v)>0).length;
       const ayAdi = new Date().toLocaleString('tr-TR', { month: 'long', year: 'numeric' });
       const buAySatisSayisi = salesHistory.filter(s => isSameMonth(s.date, getCurrentMonthKey())).length;
-
-      // Ay ay / yıl yıl grupla
-      const monthMap = {};
-      salesHistory.forEach(s => {
-        if (!s.date) return;
-        const d = new Date(s.date);
-        const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
-        if (!monthMap[key]) monthMap[key] = { total: 0, count: 0, year: d.getFullYear(), month: d.getMonth() };
-        monthMap[key].total += Number(s.total) || 0;
-        monthMap[key].count += 1;
-      });
-      const monthKeys = Object.keys(monthMap).sort().reverse(); // en yeni ay üstte
-      const ayListHTML = monthKeys.length ? monthKeys.map(key => {
-        const m = monthMap[key];
-        const label = new Date(m.year, m.month, 1).toLocaleString('tr-TR', { month: 'long', year: 'numeric' });
-        const isCurrent = key === getCurrentMonthKey();
-        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
-          <div>
-            <div style="font-weight:600;${isCurrent ? 'color:#4ade80' : ''}">${label}${isCurrent ? ' · bu ay' : ''}</div>
-            <div class="meta">${m.count} satış</div>
-          </div>
-          <div style="font-weight:700;color:${isCurrent ? '#4ade80' : '#e2e8f0'}">${money(m.total)}</div>
-        </div>`;
-      }).join('') : '<div class="meta" style="text-align:center;padding:12px 0">Henüz satış kaydı yok</div>';
-
-      // Yıl toplamları
-      const yearMap = {};
-      monthKeys.forEach(key => {
-        const m = monthMap[key];
-        if (!yearMap[m.year]) yearMap[m.year] = 0;
-        yearMap[m.year] += m.total;
-      });
-      const yearKeys = Object.keys(yearMap).map(Number).sort((a,b)=>b-a);
-      const yilListHTML = yearKeys.length ? yearKeys.map(y => {
-        return `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
-          <span style="font-weight:600">${y}</span>
-          <strong style="color:#60a5fa">${money(yearMap[y])}</strong>
-        </div>`;
-      }).join('') : '';
-
       document.getElementById('toplamContent').innerHTML = `
         <div class="sheet-handle"></div>
         <h2>Toplam <button class="btn btn-secondary" style="padding:6px 12px" onclick="closeToplam()">Kapat</button></h2>
@@ -2139,18 +2099,6 @@
           <div style="font-size:1.35rem;font-weight:700;color:#a78bfa;margin-top:4px">${money(stokDeger)}</div>
           <div class="meta" style="margin-top:4px">${products.length} ürün · ${stokAdet} adet</div>
         </div>
-
-        <div class="v-card" style="margin-top:14px">
-          <div class="meta" style="margin-bottom:6px">📅 Aylık Satışlar</div>
-          ${ayListHTML}
-        </div>
-
-        ${yearKeys.length > 1 || (yearKeys.length === 1 && yearKeys[0] !== new Date().getFullYear()) ? `
-        <div class="v-card" style="margin-top:10px">
-          <div class="meta" style="margin-bottom:6px">📆 Yıllık Toplamlar</div>
-          ${yilListHTML}
-        </div>` : ''}
-
         <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
           <div class="meta" style="text-align:center">Özet (Bu Ay)</div>
           <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:.9rem"><span>Bu Ay Satış</span><strong style="color:#4ade80">${money(satis)}</strong></div>
@@ -2158,7 +2106,10 @@
           <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:.9rem"><span>Eldeki Mal</span><strong style="color:#a78bfa">${money(stokDeger)}</strong></div>
           <div style="display:flex;justify-content:space-between;margin-top:10px;font-size:1.05rem;padding-top:8px;border-top:1px solid var(--border)"><span>Bu Ay Genel (S+V)</span><strong style="color:#60a5fa">${money(satisVeresiye)}</strong></div>
           <div style="margin-top:12px;font-size:.8rem;color:var(--muted);text-align:center">${(function(){ const l=getLastBackup(); if(!l) return 'Yedek alınmamış — Excel ile yedekleyin'; const d=Math.floor((Date.now()-new Date(l).getTime())/86400000); return d<=0?'Son yedek: bugün':'Son yedek: '+d+' gün önce'; })()}</div>
-          <button class="btn btn-secondary btn-block" style="margin-top:10px" onclick="exportExcel()">💾 Excel Yedek İndir</button>
+          <div style="display:flex;gap:8px;margin-top:10px">
+            <button class="btn btn-secondary" style="flex:1" onclick="exportExcel()">💾 Excel İndir</button>
+            <button class="btn btn-secondary" style="flex:1" onclick="document.getElementById('excelInput').click()">📂 Excelden Yükle</button>
+          </div>
         </div>
         <div style="margin-top:18px;padding:18px 16px;background:linear-gradient(135deg,#1e3a5f 0%,#0f172a 100%);border-radius:16px;text-align:center;border:1px solid rgba(59,130,246,.45);box-shadow:0 4px 20px rgba(59,130,246,.15)">
           <div style="font-size:.78rem;color:#93c5fd;letter-spacing:1.2px;font-weight:600">ELDEKİ MAL + BU AY</div>
@@ -2319,51 +2270,209 @@
       const reader=new FileReader();
       reader.onload=ev=>{
         try{
-          let rows=[];
-          if(name.endsWith('.xlsx')||name.endsWith('.xls')||(typeof XLSX!=='undefined' && ev.target.result instanceof ArrayBuffer)){
-            if(typeof XLSX==='undefined'){ toast('Excel kütüphanesi yüklenemedi'); return; }
-            const data=new Uint8Array(ev.target.result);
-            const wb=XLSX.read(data,{type:'array'});
-            // Ürünler sayfasını tercih et, yoksa ilk sayfa
-            const sheetName = wb.SheetNames.find(n=>/ürün|urun|product/i.test(n)) || wb.SheetNames[0];
-            rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {header:1, defval:''});
-          } else {
+          // CSV ise sadece ürün
+          if(!(name.endsWith('.xlsx')||name.endsWith('.xls'))){
             const text=ev.target.result;
-            rows=text.split(/\r?\n/).filter(l=>l.trim()).map(line=>{
+            const rows=text.split(/\r?\n/).filter(l=>l.trim()).map(line=>{
               const cols=line.match(/(".*?"|[^,;]+)/g)||[];
               return cols.map(c=>String(c).replace(/^"|"$/g,'').trim());
             });
-          }
-          if(!rows.length){ toast('Dosya boş'); return; }
-          // Başlık satırını atla
-          let start=0;
-          const h=(rows[0]||[]).map(x=>String(x).toLowerCase()).join(' ');
-          if(/barkod|ürün|urun|ad|fiyat|stok|name|price/.test(h)) start=1;
-          let added=0;
-          for(let i=start;i<rows.length;i++){
-            const cols=rows[i]; if(!cols||cols.length<2) continue;
-            // Esnek kolon: Barkod, Ad, Fiyat, Stok
-            let barcode='', pname='', price=0, stock=0;
-            if(cols.length>=4){
-              barcode=String(cols[0]||'').trim();
-              pname=String(cols[1]||'').trim();
-              price=parseFloat(String(cols[2]).replace(',','.'))||0;
-              stock=Math.max(0, parseInt(cols[3], 10) || 0);
-            } else {
-              pname=String(cols[0]||'').trim();
-              price=parseFloat(String(cols[1]).replace(',','.'))||0;
-              stock=Math.max(0, parseInt(cols[2], 10) || 0);
+            if(!rows.length){ toast('Dosya boş'); return; }
+            let start=0;
+            const h=(rows[0]||[]).map(x=>String(x).toLowerCase()).join(' ');
+            if(/barkod|ürün|urun|ad|fiyat|stok|name|price/.test(h)) start=1;
+            let added=0;
+            for(let i=start;i<rows.length;i++){
+              const cols=rows[i]; if(!cols||cols.length<2) continue;
+              let barcode='', pname='', price=0, stock=0;
+              if(cols.length>=4){
+                barcode=String(cols[0]||'').trim();
+                pname=String(cols[1]||'').trim();
+                price=parseFloat(String(cols[2]).replace(',','.'))||0;
+                stock=Math.max(0, parseInt(cols[3], 10) || 0);
+              } else {
+                pname=String(cols[0]||'').trim();
+                price=parseFloat(String(cols[1]).replace(',','.'))||0;
+                stock=Math.max(0, parseInt(cols[2], 10) || 0);
+              }
+              if(!pname || /^toplam$/i.test(pname)) continue;
+              let existing=null;
+              if(barcode) existing=products.find(p=>p.barcode&&p.barcode===barcode);
+              if(!existing) existing=products.find(p=>p.name&&p.name.toLowerCase()===pname.toLowerCase());
+              if(existing){ existing.name=pname; if(barcode) existing.barcode=barcode; existing.price=price; existing.stock=stock; }
+              else products.push({id:id(), name:pname, barcode, price, stock});
+              added++;
             }
-            if(!pname) continue;
-            let existing=null;
-            if(barcode) existing=products.find(p=>p.barcode&&p.barcode===barcode);
-            if(!existing) existing=products.find(p=>p.name&&p.name.toLowerCase()===pname.toLowerCase());
-            if(existing){ existing.name=pname; if(barcode) existing.barcode=barcode; existing.price=price; existing.stock=stock; }
-            else products.push({id:id(), name:pname, barcode, price, stock});
-            added++;
+            products.sort((a,b)=>(a.name||'').localeCompare(b.name||'','tr',{sensitivity:'base'}));
+            save(); render(); toast(added+' ürün yüklendi');
+            return;
           }
-          products.sort((a,b)=>(a.name||'').localeCompare(b.name||'','tr',{sensitivity:'base'}));
-          save(); render(); toast(added+' ürün yüklendi');
+
+          if(typeof XLSX==='undefined'){ toast('Excel kütüphanesi yüklenemedi'); return; }
+          const data=new Uint8Array(ev.target.result);
+          const wb=XLSX.read(data,{type:'array'});
+          const names = wb.SheetNames || [];
+          const findSheet = (re) => {
+            const n = names.find(x => re.test(x));
+            return n ? XLSX.utils.sheet_to_json(wb.Sheets[n], {header:1, defval:''}) : null;
+          };
+
+          let msgParts = [];
+
+          // --- ÜRÜNLER ---
+          const urunRows = findSheet(/ürün|urun|product/i) || (names[0] ? XLSX.utils.sheet_to_json(wb.Sheets[names[0]], {header:1, defval:''}) : []);
+          if(urunRows && urunRows.length){
+            let start=0;
+            const h=(urunRows[0]||[]).map(x=>String(x).toLowerCase()).join(' ');
+            if(/barkod|ürün|urun|ad|fiyat|stok|name|price/.test(h)) start=1;
+            let added=0;
+            for(let i=start;i<urunRows.length;i++){
+              const cols=urunRows[i]; if(!cols||cols.length<2) continue;
+              let barcode='', pname='', price=0, stock=0;
+              if(cols.length>=4){
+                barcode=String(cols[0]||'').trim();
+                pname=String(cols[1]||'').trim();
+                price=parseFloat(String(cols[2]).replace(',','.'))||0;
+                stock=Math.max(0, parseInt(cols[3], 10) || 0);
+              } else {
+                pname=String(cols[0]||'').trim();
+                price=parseFloat(String(cols[1]).replace(',','.'))||0;
+                stock=Math.max(0, parseInt(cols[2], 10) || 0);
+              }
+              if(!pname || /^toplam$/i.test(pname)) continue;
+              let existing=null;
+              if(barcode) existing=products.find(p=>p.barcode&&p.barcode===barcode);
+              if(!existing) existing=products.find(p=>p.name&&p.name.toLowerCase()===pname.toLowerCase());
+              if(existing){ existing.name=pname; if(barcode) existing.barcode=barcode; existing.price=price; existing.stock=stock; }
+              else products.push({id:id(), name:pname, barcode, price, stock});
+              added++;
+            }
+            products.sort((a,b)=>(a.name||'').localeCompare(b.name||'','tr',{sensitivity:'base'}));
+            msgParts.push(added+' ürün');
+          }
+
+          // --- SATIŞLAR + KALEMLER (tam yedek geri yükleme) ---
+          const satisRows = findSheet(/^satışlar$|^satislar$/i);
+          const kalemRows = findSheet(/satış kalem|satis kalem/i);
+          if(satisRows && satisRows.length > 1){
+            // Kalemleri tarihe göre grupla
+            const kalemByKey = {};
+            if(kalemRows && kalemRows.length > 1){
+              for(let i=1;i<kalemRows.length;i++){
+                const c = kalemRows[i];
+                if(!c || !c[0]) continue;
+                if(String(c[2]||'').toUpperCase()==='TOPLAM') continue;
+                const key = String(c[0])+'|'+String(c[1]); // tarih|saat
+                if(!kalemByKey[key]) kalemByKey[key]=[];
+                kalemByKey[key].push({
+                  name: String(c[2]||''),
+                  qty: Number(c[3])||0,
+                  price: Number(c[4])||0
+                });
+              }
+            }
+            const newSales = [];
+            for(let i=1;i<satisRows.length;i++){
+              const c = satisRows[i];
+              if(!c || !c[0]) continue;
+              if(String(c[1]||'').toUpperCase()==='TOPLAM') continue;
+              const tarih = String(c[0]||'');
+              const saat = String(c[1]||'');
+              const total = Number(c[2])||0;
+              const kaynak = String(c[4]||'');
+              const person = String(c[5]||'');
+              // Tarih+saat'ten ISO üretmeye çalış
+              let dateIso = new Date().toISOString();
+              try {
+                const parts = tarih.split(/[./-]/);
+                let day, month, year;
+                if(parts[0].length===4){ year=+parts[0]; month=+parts[1]; day=+parts[2]; }
+                else { day=+parts[0]; month=+parts[1]; year=+parts[2]; }
+                const tparts = (saat||'00:00').split(':');
+                const hh = +(tparts[0]||0), mm = +(tparts[1]||0);
+                const d = new Date(year, month-1, day, hh, mm, 0);
+                if(!isNaN(d.getTime())) dateIso = d.toISOString();
+              } catch(ex){}
+              const key = tarih+'|'+saat;
+              const items = kalemByKey[key] || [];
+              newSales.push({
+                id: id(),
+                date: dateIso,
+                total,
+                items,
+                fromVeresiye: /veresiye/i.test(kaynak),
+                manual: /elle/i.test(kaynak),
+                person: person || undefined
+              });
+            }
+            newSales.sort((a,b)=> new Date(b.date) - new Date(a.date));
+            salesHistory = newSales;
+            msgParts.push(newSales.length+' satış');
+          }
+
+          // --- VERESİYE ---
+          const verRows = findSheet(/^veresiye$/i);
+          const verKalemRows = findSheet(/veresiye kalem/i);
+          if(verRows && verRows.length > 1){
+            const byPerson = {};
+            if(verKalemRows && verKalemRows.length > 1){
+              for(let i=1;i<verKalemRows.length;i++){
+                const c = verKalemRows[i];
+                if(!c || !c[0]) continue;
+                const pname = String(c[0]||'').trim();
+                if(!pname) continue;
+                if(!byPerson[pname]) byPerson[pname] = { id: id(), name: pname, entries: [] };
+                const tarih = String(c[1]||'');
+                const saat = String(c[2]||'');
+                const durum = String(c[3]||'');
+                const total = Number(c[4])||0;
+                let dateIso = new Date().toISOString();
+                try {
+                  const parts = tarih.split(/[./-]/);
+                  let day, month, year;
+                  if(parts[0]&&parts[0].length===4){ year=+parts[0]; month=+parts[1]; day=+parts[2]; }
+                  else { day=+parts[0]; month=+parts[1]; year=+parts[2]; }
+                  const tparts = (saat||'00:00').split(':');
+                  const d = new Date(year, (month||1)-1, day||1, +(tparts[0]||0), +(tparts[1]||0), 0);
+                  if(!isNaN(d.getTime())) dateIso = d.toISOString();
+                } catch(ex){}
+                // Aynı entry'yi tarihe göre birleştir
+                let entry = byPerson[pname].entries.find(e => e.date === dateIso && e.total === total);
+                if(!entry){
+                  entry = {
+                    id: id(),
+                    date: dateIso,
+                    total,
+                    items: [],
+                    paid: /ödendi|odendi/i.test(durum),
+                    manual: /evet/i.test(String(c[9]||''))
+                  };
+                  byPerson[pname].entries.push(entry);
+                }
+                entry.items.push({
+                  name: String(c[5]||''),
+                  qty: Number(c[6])||0,
+                  price: Number(c[7])||0
+                });
+              }
+            } else {
+              // Sadece özet sayfa varsa boş entries ile kişi oluştur
+              for(let i=1;i<verRows.length;i++){
+                const c = verRows[i];
+                const pname = String(c[1]||c[0]||'').trim();
+                if(!pname || /^sıra$|^sira$/i.test(pname)) continue;
+                if(!byPerson[pname]) byPerson[pname] = { id: id(), name: pname, entries: [] };
+              }
+            }
+            veresiye = Object.values(byPerson);
+            mergeVeresiyeNames();
+            msgParts.push(veresiye.length+' veresiye');
+          }
+
+          saveAll();
+          render();
+          if(document.getElementById('toplamSheet').classList.contains('show')) openToplam();
+          toast(msgParts.length ? ('Yüklendi: ' + msgParts.join(' · ')) : 'Veri bulunamadı');
         }catch(err){ console.error(err); toast('Dosya okunamadı'); }
       };
       if(name.endsWith('.xlsx')||name.endsWith('.xls')) reader.readAsArrayBuffer(file);
