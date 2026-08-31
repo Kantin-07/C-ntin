@@ -289,7 +289,26 @@
       return (p.entries||[]).filter(e=>!e.paid).reduce((s,e)=>s+e.total,0);
     }
     function totalVeresiye(){ return veresiye.reduce((s,p)=>s+personBalance(p),0); }
-    function totalSales(){ return salesHistory.reduce((s,x)=>s+x.total,0); }
+    function getCurrentMonthKey() {
+      const d = new Date();
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    }
+    function isSameMonth(dateStr, monthKey) {
+      if (!dateStr) return false;
+      const d = new Date(dateStr);
+      const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+      return key === monthKey;
+    }
+    // Sadece içinde bulunulan ayın satışlarını toplar → ay değişince otomatik sıfırlanır
+    function totalSales() {
+      const key = getCurrentMonthKey();
+      return salesHistory
+        .filter(s => isSameMonth(s.date, key))
+        .reduce((s, x) => s + (Number(x.total) || 0), 0);
+    }
+    function totalSalesAll() {
+      return salesHistory.reduce((s, x) => s + (Number(x.total) || 0), 0);
+    }
 
     function beep(){
       try{
@@ -2052,17 +2071,59 @@
       stopLiveScanner();
       const stokDeger = products.reduce((s,p)=>s+(p.price||0)*(p.stock||0),0);
       const stokAdet = products.reduce((s,p)=>s+(p.stock||0),0);
-      const satis = totalSales();
+      const satis = totalSales(); // sadece bu ay
       const veres = totalVeresiye();
       const satisVeresiye = satis + veres;
       const kisi = veresiye.filter(v=>personBalance(v)>0).length;
+      const ayAdi = new Date().toLocaleString('tr-TR', { month: 'long', year: 'numeric' });
+      const buAySatisSayisi = salesHistory.filter(s => isSameMonth(s.date, getCurrentMonthKey())).length;
+
+      // Ay ay / yıl yıl grupla
+      const monthMap = {};
+      salesHistory.forEach(s => {
+        if (!s.date) return;
+        const d = new Date(s.date);
+        const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+        if (!monthMap[key]) monthMap[key] = { total: 0, count: 0, year: d.getFullYear(), month: d.getMonth() };
+        monthMap[key].total += Number(s.total) || 0;
+        monthMap[key].count += 1;
+      });
+      const monthKeys = Object.keys(monthMap).sort().reverse(); // en yeni ay üstte
+      const ayListHTML = monthKeys.length ? monthKeys.map(key => {
+        const m = monthMap[key];
+        const label = new Date(m.year, m.month, 1).toLocaleString('tr-TR', { month: 'long', year: 'numeric' });
+        const isCurrent = key === getCurrentMonthKey();
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
+          <div>
+            <div style="font-weight:600;${isCurrent ? 'color:#4ade80' : ''}">${label}${isCurrent ? ' · bu ay' : ''}</div>
+            <div class="meta">${m.count} satış</div>
+          </div>
+          <div style="font-weight:700;color:${isCurrent ? '#4ade80' : '#e2e8f0'}">${money(m.total)}</div>
+        </div>`;
+      }).join('') : '<div class="meta" style="text-align:center;padding:12px 0">Henüz satış kaydı yok</div>';
+
+      // Yıl toplamları
+      const yearMap = {};
+      monthKeys.forEach(key => {
+        const m = monthMap[key];
+        if (!yearMap[m.year]) yearMap[m.year] = 0;
+        yearMap[m.year] += m.total;
+      });
+      const yearKeys = Object.keys(yearMap).map(Number).sort((a,b)=>b-a);
+      const yilListHTML = yearKeys.length ? yearKeys.map(y => {
+        return `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+          <span style="font-weight:600">${y}</span>
+          <strong style="color:#60a5fa">${money(yearMap[y])}</strong>
+        </div>`;
+      }).join('') : '';
+
       document.getElementById('toplamContent').innerHTML = `
         <div class="sheet-handle"></div>
         <h2>Toplam <button class="btn btn-secondary" style="padding:6px 12px" onclick="closeToplam()">Kapat</button></h2>
         <div class="v-card">
-          <div class="meta">Satış Toplamı</div>
+          <div class="meta">Bu Ay Satış Toplamı (${ayAdi})</div>
           <div style="font-size:1.35rem;font-weight:700;color:#4ade80;margin-top:4px">${money(satis)}</div>
-          <div class="meta" style="margin-top:4px">${salesHistory.length} satış kaydı</div>
+          <div class="meta" style="margin-top:4px">${buAySatisSayisi} satış kaydı</div>
         </div>
         <div class="v-card">
           <div class="meta">Veresiye Bakiye</div>
@@ -2070,27 +2131,39 @@
           <div class="meta" style="margin-top:4px">${kisi} kişide açık borç</div>
         </div>
         <div class="v-card">
-          <div class="meta">Satış + Veresiye</div>
+          <div class="meta">Bu Ay Satış + Veresiye</div>
           <div style="font-size:1.35rem;font-weight:700;color:#60a5fa;margin-top:4px">${money(satisVeresiye)}</div>
         </div>
         <div class="v-card">
-          <div class="meta">Stok Fiyat Toplamı</div>
+          <div class="meta">Eldeki Mal (Stok Değeri)</div>
           <div style="font-size:1.35rem;font-weight:700;color:#a78bfa;margin-top:4px">${money(stokDeger)}</div>
           <div class="meta" style="margin-top:4px">${products.length} ürün · ${stokAdet} adet</div>
         </div>
+
+        <div class="v-card" style="margin-top:14px">
+          <div class="meta" style="margin-bottom:6px">📅 Aylık Satışlar</div>
+          ${ayListHTML}
+        </div>
+
+        ${yearKeys.length > 1 || (yearKeys.length === 1 && yearKeys[0] !== new Date().getFullYear()) ? `
+        <div class="v-card" style="margin-top:10px">
+          <div class="meta" style="margin-bottom:6px">📆 Yıllık Toplamlar</div>
+          ${yilListHTML}
+        </div>` : ''}
+
         <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
-          <div class="meta" style="text-align:center">Özet</div>
-          <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:.9rem"><span>Satış</span><strong style="color:#4ade80">${money(satis)}</strong></div>
+          <div class="meta" style="text-align:center">Özet (Bu Ay)</div>
+          <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:.9rem"><span>Bu Ay Satış</span><strong style="color:#4ade80">${money(satis)}</strong></div>
           <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:.9rem"><span>Veresiye</span><strong style="color:#fbbf24">${money(veres)}</strong></div>
-          <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:.9rem"><span>Stok</span><strong style="color:#a78bfa">${money(stokDeger)}</strong></div>
-          <div style="display:flex;justify-content:space-between;margin-top:10px;font-size:1.05rem;padding-top:8px;border-top:1px solid var(--border)"><span>Genel Toplam (S+V)</span><strong style="color:#60a5fa">${money(satisVeresiye)}</strong></div>
+          <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:.9rem"><span>Eldeki Mal</span><strong style="color:#a78bfa">${money(stokDeger)}</strong></div>
+          <div style="display:flex;justify-content:space-between;margin-top:10px;font-size:1.05rem;padding-top:8px;border-top:1px solid var(--border)"><span>Bu Ay Genel (S+V)</span><strong style="color:#60a5fa">${money(satisVeresiye)}</strong></div>
           <div style="margin-top:12px;font-size:.8rem;color:var(--muted);text-align:center">${(function(){ const l=getLastBackup(); if(!l) return 'Yedek alınmamış — Excel ile yedekleyin'; const d=Math.floor((Date.now()-new Date(l).getTime())/86400000); return d<=0?'Son yedek: bugün':'Son yedek: '+d+' gün önce'; })()}</div>
           <button class="btn btn-secondary btn-block" style="margin-top:10px" onclick="exportExcel()">💾 Excel Yedek İndir</button>
         </div>
         <div style="margin-top:18px;padding:18px 16px;background:linear-gradient(135deg,#1e3a5f 0%,#0f172a 100%);border-radius:16px;text-align:center;border:1px solid rgba(59,130,246,.45);box-shadow:0 4px 20px rgba(59,130,246,.15)">
-          <div style="font-size:.78rem;color:#93c5fd;letter-spacing:1.2px;font-weight:600">TÜM TOPLAMLAR</div>
+          <div style="font-size:.78rem;color:#93c5fd;letter-spacing:1.2px;font-weight:600">ELDEKİ MAL + BU AY</div>
           <div style="font-size:1.9rem;font-weight:800;color:#fff;margin-top:8px;letter-spacing:-0.5px">${money(satis + veres + stokDeger)}</div>
-          <div style="font-size:.72rem;color:#64748b;margin-top:6px">Satış + Veresiye + Stok Değeri</div>
+          <div style="font-size:.72rem;color:#64748b;margin-top:6px">Bu Ay Satış + Veresiye + Stok Değeri</div>
         </div>`;
       document.getElementById('toplamSheet').classList.add('show');
       enableSwipeClose('toplamSheet','toplamContent',closeToplam);
@@ -2124,29 +2197,38 @@
 
       // 1) ÜRÜNLER
       const urunRows = [['Barkod','Ürün Adı','Fiyat (₺)','Stok','Stok Değeri (₺)']];
+      let toplamStokDeger = 0;
       products.forEach(p=>{
         const fiyat=Number(p.price)||0, stok=Number(p.stock)||0;
-        urunRows.push([p.barcode||'', p.name||'', fiyat, stok, Math.round(fiyat*stok*100)/100]);
+        const deger = Math.round(fiyat*stok*100)/100;
+        toplamStokDeger += deger;
+        urunRows.push([p.barcode||'', p.name||'', fiyat, stok, deger]);
       });
+      urunRows.push(['', 'TOPLAM', '', '', Math.round(toplamStokDeger*100)/100]);
       const wsUrun = XLSX.utils.aoa_to_sheet(urunRows);
       wsUrun['!cols'] = [{wch:16},{wch:28},{wch:12},{wch:10},{wch:14}];
       XLSX.utils.book_append_sheet(wb, wsUrun, 'Ürünler');
 
       // 2) SATIŞLAR (fiş özeti)
       const satisRows = [['Tarih','Saat','Toplam (₺)','Ürün Sayısı','Kaynak','Müşteri']];
+      let genelSatisToplam = 0;
       salesHistory.forEach(s=>{
         const d=new Date(s.date);
         const tarih=d.toLocaleDateString('tr-TR');
         const saat=d.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});
         const kaynak=s.fromVeresiye?'Veresiye Tahsilat':(s.manual?'Elle Giriş':'Nakit Satış');
-        satisRows.push([tarih, saat, Number(s.total)||0, (s.items||[]).length, kaynak, s.person||'']);
+        const tutar = Number(s.total)||0;
+        genelSatisToplam += tutar;
+        satisRows.push([tarih, saat, tutar, (s.items||[]).length, kaynak, s.person||'']);
       });
+      satisRows.push(['', 'TOPLAM', Math.round(genelSatisToplam*100)/100, '', '', '']);
       const wsSatis = XLSX.utils.aoa_to_sheet(satisRows);
       wsSatis['!cols'] = [{wch:14},{wch:8},{wch:12},{wch:12},{wch:16},{wch:18}];
       XLSX.utils.book_append_sheet(wb, wsSatis, 'Satışlar');
 
       // 3) SATIŞ KALEMLERİ
       const kalemRows = [['Tarih','Saat','Ürün','Adet','Birim Fiyat (₺)','Satır Tutarı (₺)','Kaynak','Müşteri']];
+      let kalemToplam = 0;
       salesHistory.forEach(s=>{
         const d=new Date(s.date);
         const tarih=d.toLocaleDateString('tr-TR');
@@ -2154,9 +2236,12 @@
         const kaynak=s.fromVeresiye?'Veresiye Tahsilat':(s.manual?'Elle Giriş':'Nakit Satış');
         (s.items||[]).forEach(it=>{
           const adet=Number(it.qty)||0, fiyat=Number(it.price)||0;
-          kalemRows.push([tarih, saat, it.name||'', adet, fiyat, Math.round(adet*fiyat*100)/100, kaynak, s.person||'']);
+          const tutar = Math.round(adet*fiyat*100)/100;
+          kalemToplam += tutar;
+          kalemRows.push([tarih, saat, it.name||'', adet, fiyat, tutar, kaynak, s.person||'']);
         });
       });
+      kalemRows.push(['', '', 'TOPLAM', '', '', Math.round(kalemToplam*100)/100, '', '']);
       const wsKalem = XLSX.utils.aoa_to_sheet(kalemRows);
       wsKalem['!cols'] = [{wch:14},{wch:8},{wch:24},{wch:8},{wch:14},{wch:14},{wch:16},{wch:18}];
       XLSX.utils.book_append_sheet(wb, wsKalem, 'Satış Kalemleri');
@@ -2197,21 +2282,26 @@
       // 6) ÖZET
       const stokDeger=products.reduce((s,p)=>s+(Number(p.price)||0)*(Number(p.stock)||0),0);
       const stokAdet=products.reduce((s,p)=>s+(Number(p.stock)||0),0);
-      const satis=totalSales();
+      const satis=totalSales(); // bu ay
+      const satisTum=totalSalesAll(); // tüm zamanlar
       const veres=totalVeresiye();
+      const ayAdi = new Date().toLocaleString('tr-TR', { month: 'long', year: 'numeric' });
       const ozet = [
         ['KANTİN — Özet Rapor'],
         ['Tarih', new Date().toLocaleString('tr-TR')],
+        ['Dönem', ayAdi],
         [],
         ['Bölüm','Tutar / Değer'],
-        ['Satış Toplamı (₺)', Math.round(satis*100)/100],
+        ['Bu Ay Satış Toplamı (₺)', Math.round(satis*100)/100],
+        ['Tüm Zamanlar Satış (₺)', Math.round(satisTum*100)/100],
         ['Veresiye Açık Bakiye (₺)', Math.round(veres*100)/100],
-        ['Satış + Veresiye (₺)', Math.round((satis+veres)*100)/100],
-        ['Stok Fiyat Toplamı (₺)', Math.round(stokDeger*100)/100],
+        ['Bu Ay Satış + Veresiye (₺)', Math.round((satis+veres)*100)/100],
+        ['Eldeki Mal / Stok Değeri (₺)', Math.round(stokDeger*100)/100],
         [],
         ['Ürün Çeşidi', products.length],
         ['Toplam Stok Adedi', stokAdet],
-        ['Satış Kaydı', salesHistory.length],
+        ['Bu Ay Satış Kaydı', salesHistory.filter(s => isSameMonth(s.date, getCurrentMonthKey())).length],
+        ['Tüm Satış Kaydı', salesHistory.length],
         ['Veresiye Kişisi', veresiye.length],
         ['Açık Borçlu Kişi', veresiye.filter(v=>personBalance(v)>0).length]
       ];
