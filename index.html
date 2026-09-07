@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#0f172a">
+<meta name="theme-color" content="#eef4ff">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
@@ -14,95 +14,106 @@
 <title>KANTİN</title>
 <style>
   :root {
-    --bg: #0b1120; --card: #1e293b; --card2: #334155;
-    --primary: #3b82f6; --primary-glow: rgba(59,130,246,.4);
-    --success: #22c55e; --danger: #ef4444; --warn: #f59e0b;
-    --text: #f1f5f9; --muted: #94a3b8; --border: #334155;
+    --bg: #f0f4fb;
+    --card: #ffffff;
+    --card2: #e8eef8;
+    --primary: #3b82f6;
+    --primary-glow: rgba(59,130,246,.28);
+    --success: #16a34a;
+    --danger: #e11d48;
+    --warn: #f59e0b;
+    --text: #0f172a;
+    --muted: #64748b;
+    --border: #d8e0ef;
+    --accent: #06b6d4;
   }
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-  body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:88px}
-  .header{background:linear-gradient(135deg,#0f172a,#1e3a8a);padding:16px 16px 14px;position:sticky;top:0;z-index:50;border-bottom:1px solid rgba(59,130,246,.25)}
-  .header h1{font-size:1.25rem;font-weight:700}
+  body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Roboto,sans-serif;background:linear-gradient(180deg,#eef4ff 0%,#f7f9fc 40%,#f0f4fb 100%);color:var(--text);min-height:100vh;padding-bottom:88px}
+  .header{background:linear-gradient(135deg,#ffffff 0%,#e8f1ff 55%,#dbeafe 100%);padding:16px 16px 14px;position:sticky;top:0;z-index:50;border-bottom:1px solid rgba(59,130,246,.18);box-shadow:0 4px 20px rgba(59,130,246,.08)}
+  .header h1{font-size:1.25rem;font-weight:800;background:linear-gradient(90deg,#1d4ed8,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
   .header p{font-size:.75rem;color:var(--muted);margin-top:2px}
   .tabs{display:flex;gap:8px;margin-top:12px}
-  .tabs button{flex:1;padding:11px;border:none;border-radius:12px;background:rgba(255,255,255,.08);color:var(--muted);font-weight:600;font-size:.9rem}
-  .tabs button.active{background:var(--primary);color:#fff;box-shadow:0 0 18px var(--primary-glow)}
+  .tabs button{flex:1;padding:11px;border:none;border-radius:12px;background:rgba(255,255,255,.7);color:var(--muted);font-weight:600;font-size:.9rem;border:1px solid var(--border)}
+  .tabs button.active{background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;border-color:transparent;box-shadow:0 6px 18px var(--primary-glow)}
   .container{padding:14px;max-width:480px;margin:0 auto}
-  .search{width:100%;padding:12px 14px;border:1px solid var(--border);border-radius:12px;font-size:1rem;background:var(--card);color:var(--text);margin-bottom:12px;outline:none}
-  .card{background:var(--card);border-radius:14px;padding:13px 14px;margin-bottom:9px;display:flex;justify-content:space-between;align-items:center;border:1px solid var(--border)}
+  .search{width:100%;padding:12px 14px;border:1px solid var(--border);border-radius:12px;font-size:1rem;background:var(--card);color:var(--text);margin-bottom:12px;outline:none;box-shadow:0 1px 3px rgba(15,23,42,.04)}
+  .search:focus{border-color:#93c5fd;box-shadow:0 0 0 3px rgba(59,130,246,.15)}
+  .card{background:var(--card);border-radius:16px;padding:13px 14px;margin-bottom:9px;display:flex;justify-content:space-between;align-items:center;border:1px solid var(--border);box-shadow:0 2px 10px rgba(15,23,42,.04)}
   .card h3{font-size:.95rem;font-weight:600}
   .meta{font-size:.78rem;color:var(--muted);margin-top:2px}
-  .price{font-weight:700;color:#60a5fa;font-size:1.05rem}
+  .price{font-weight:700;color:#2563eb;font-size:1.05rem}
   .stock{font-size:.75rem;padding:2px 8px;border-radius:20px;display:inline-block;margin-top:3px;font-weight:600}
-  .stock-ok{background:rgba(34,197,94,.15);color:#4ade80}
-  .stock-low{background:rgba(234,179,8,.15);color:#facc15}
-  .stock-zero{background:rgba(239,68,68,.15);color:#f87171}
-  .total-bar{background:linear-gradient(135deg,#1e3a8a,#2563eb);border-radius:14px;padding:14px 16px;margin-top:14px;font-weight:700;display:flex;justify-content:space-between;box-shadow:0 4px 18px rgba(30,64,175,.3)}
-  .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:12px 16px;border:none;border-radius:12px;font-weight:600;font-size:.95rem;cursor:pointer}
+  .stock-ok{background:rgba(22,163,74,.12);color:#15803d}
+  .stock-low{background:rgba(245,158,11,.15);color:#b45309}
+  .stock-zero{background:rgba(225,29,72,.12);color:#be123c}
+  .total-bar{background:linear-gradient(135deg,#3b82f6,#06b6d4);color:#fff;border-radius:16px;padding:14px 16px;margin-top:14px;font-weight:700;display:flex;justify-content:space-between;box-shadow:0 8px 24px rgba(59,130,246,.25)}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:12px 16px;border:none;border-radius:12px;font-weight:600;font-size:.95rem;cursor:pointer;transition:transform .12s ease,box-shadow .12s ease}
   .btn:active{transform:scale(.97)}
-  .btn-primary{background:var(--primary);color:#fff}
-  .btn-success{background:var(--success);color:#fff}
-  .btn-danger{background:var(--danger);color:#fff}
-  .btn-warn{background:var(--warn);color:#111}
-  .btn-secondary{background:var(--card2);color:var(--text);border:1px solid var(--border)}
+  .btn-primary{background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;box-shadow:0 4px 14px var(--primary-glow)}
+  .btn-success{background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff}
+  .btn-danger{background:linear-gradient(135deg,#f43f5e,#e11d48);color:#fff}
+  .btn-warn{background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#111}
+  .btn-secondary{background:#fff;color:var(--text);border:1px solid var(--border);box-shadow:0 1px 3px rgba(15,23,42,.04)}
   .btn-block{width:100%}
-  .fab{position:fixed;bottom:88px;right:16px;width:56px;height:56px;border-radius:50%;background:var(--primary);color:#fff;border:none;font-size:1.7rem;box-shadow:0 6px 22px var(--primary-glow);z-index:40}
-  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;display:none;align-items:flex-end;justify-content:center;backdrop-filter:blur(4px)}
+  .fab{position:fixed;bottom:88px;right:16px;width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#06b6d4);color:#fff;border:none;font-size:1.7rem;box-shadow:0 8px 24px var(--primary-glow);z-index:40}
+  .modal-bg{position:fixed;inset:0;background:rgba(15,23,42,.35);z-index:100;display:none;align-items:flex-end;justify-content:center;backdrop-filter:blur(6px)}
   .modal-bg.show{display:flex}
-  .modal{background:var(--card);width:100%;max-width:480px;border-radius:20px 20px 0 0;padding:20px 16px;max-height:94vh;overflow-y:auto;border-top:1px solid var(--border);color:#f1f5f9}
+  .modal{background:var(--card);width:100%;max-width:480px;border-radius:22px 22px 0 0;padding:20px 16px;max-height:94vh;overflow-y:auto;border-top:1px solid var(--border);color:var(--text);box-shadow:0 -8px 40px rgba(15,23,42,.12)}
   .modal h2{font-size:1.15rem;margin-bottom:16px}
   .form-group{margin-bottom:13px}
   .form-group label{display:block;font-size:.8rem;font-weight:600;color:var(--muted);margin-bottom:5px}
-  .form-group input,.form-group select{width:100%;padding:12px;border:1px solid var(--border);border-radius:11px;font-size:1rem;background:var(--bg);color:var(--text);outline:none}
+  .form-group input,.form-group select{width:100%;padding:12px;border:1px solid var(--border);border-radius:11px;font-size:1rem;background:#f8fafc;color:var(--text);outline:none}
+  .form-group input:focus,.form-group select:focus{border-color:#93c5fd;box-shadow:0 0 0 3px rgba(59,130,246,.12);background:#fff}
   .form-row{display:flex;gap:10px}
   .form-row .form-group{flex:1}
   .cart-item{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border)}
-  .cart-total{font-size:1.45rem;font-weight:700;text-align:right;margin:16px 0;color:#60a5fa}
+  .cart-total{font-size:1.45rem;font-weight:800;text-align:right;margin:16px 0;color:#2563eb}
   .empty{text-align:center;padding:40px 16px;color:var(--muted)}
-  .toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#1e293b;color:#fff;padding:11px 18px;border-radius:12px;font-size:.9rem;z-index:200;opacity:0;transition:.25s;pointer-events:none;border:1px solid var(--border)}
+  .toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:11px 18px;border-radius:14px;font-size:.9rem;z-index:200;opacity:0;transition:.25s;pointer-events:none;box-shadow:0 8px 28px rgba(15,23,42,.25)}
   .toast.show{opacity:1}
-.bottom-bar{position:fixed;bottom:max(6px, env(safe-area-inset-bottom));left:8px;right:8px;background:rgba(15,23,42,.97);backdrop-filter:blur(12px);border:1px solid var(--border);border-radius:16px;padding:5px 5px;display:flex;gap:5px;z-index:30;box-shadow:0 8px 28px rgba(0,0,0,.35)}
+  .bottom-bar{position:fixed;bottom:max(6px, env(safe-area-inset-bottom));left:8px;right:8px;background:rgba(255,255,255,.92);backdrop-filter:blur(16px);border:1px solid var(--border);border-radius:18px;padding:5px 5px;display:flex;gap:5px;z-index:30;box-shadow:0 8px 32px rgba(15,23,42,.12)}
   .bottom-bar button{border-radius:12px !important}
   .bottom-bar button{flex:1;padding:9px 3px;border-radius:11px;border:none;font-weight:600;font-size:.8rem;background:var(--card2);color:var(--text);line-height:1.15}
-  .sheet{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:90;display:none;align-items:flex-end;justify-content:center;backdrop-filter:blur(4px)}
+  .sheet{position:fixed;inset:0;background:rgba(15,23,42,.35);z-index:90;display:none;align-items:flex-end;justify-content:center;backdrop-filter:blur(6px)}
   .sheet.show{display:flex}
-  .sheet-content{background:var(--card);width:100%;max-width:480px;border-radius:20px 20px 0 0;max-height:96vh;height:96vh;overflow-y:auto;padding:8px 16px calc(20px + env(safe-area-inset-bottom));border-top:1px solid var(--border);transition:height .28s ease,max-height .28s ease,transform .2s ease;touch-action:pan-y;color:#f1f5f9}
+  .sheet-content{background:var(--card);width:100%;max-width:480px;border-radius:22px 22px 0 0;max-height:96vh;height:96vh;overflow-y:auto;padding:8px 16px calc(20px + env(safe-area-inset-bottom));border-top:1px solid var(--border);transition:height .28s ease,max-height .28s ease,transform .2s ease;touch-action:pan-y;color:var(--text);box-shadow:0 -8px 40px rgba(15,23,42,.12)}
   .sheet-content.expanded{max-height:96vh;height:96vh}
   .sheet-content h2{font-size:1.15rem;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
-  .sheet-handle{width:42px;height:5px;background:var(--border);border-radius:4px;margin:6px auto 12px;flex-shrink:0}
-  .month-header{background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;padding:11px 14px;border-radius:11px;margin:14px 0 8px;font-weight:700;display:flex;justify-content:space-between;cursor:pointer}
-  .day-header{font-weight:600;font-size:.85rem;color:var(--muted);margin:10px 0 6px;padding:8px 10px;background:var(--bg);border-radius:10px;border:1px solid var(--border);display:flex;justify-content:space-between;cursor:pointer}
-  .sale-item{background:#f8fafc;border-radius:10px;padding:11px 13px;margin-bottom:6px;border:1px solid #e2e8f0;color:#0f172a}
-  .scanner-wrap{background:#000;border-radius:16px;overflow:hidden;margin-bottom:12px;position:relative;height:260px}
+  .sheet-handle{width:42px;height:5px;background:#cbd5e1;border-radius:4px;margin:6px auto 12px;flex-shrink:0}
+  .month-header{background:linear-gradient(135deg,#3b82f6,#06b6d4);color:#fff;padding:11px 14px;border-radius:12px;margin:14px 0 8px;font-weight:700;display:flex;justify-content:space-between;cursor:pointer;box-shadow:0 4px 14px rgba(59,130,246,.2)}
+  .day-header{font-weight:600;font-size:.85rem;color:var(--muted);margin:10px 0 6px;padding:8px 10px;background:#f8fafc;border-radius:10px;border:1px solid var(--border);display:flex;justify-content:space-between;cursor:pointer}
+  .sale-item{background:#f8fafc;border-radius:12px;padding:11px 13px;margin-bottom:6px;border:1px solid #e2e8f0;color:#0f172a}
+  .scanner-wrap{background:#0f172a;border-radius:18px;overflow:hidden;margin-bottom:12px;position:relative;height:260px;box-shadow:0 8px 24px rgba(15,23,42,.15);border:2px solid #e2e8f0}
   #liveScanner,#listScanner{width:100%;height:100%}
   #liveScanner video,#listScanner video{object-fit:cover !important;width:100% !important;height:100% !important;display:block !important}
   #productScanner{width:100% !important;height:260px !important}
   #productScanner video{object-fit:cover !important;width:100% !important;height:260px !important;display:block !important}
   #productScanner img{display:none !important}
-  .scan-line{position:absolute;left:8%;right:8%;top:50%;height:2px;background:#facc15;box-shadow:0 0 10px #facc15,0 0 20px rgba(250,204,21,.5);z-index:5;pointer-events:none;border-radius:2px;animation:scanPulse 1.2s ease-in-out infinite}
+  .scan-line{position:absolute;left:8%;right:8%;top:50%;height:2px;background:#38bdf8;box-shadow:0 0 12px #38bdf8,0 0 24px rgba(56,189,248,.5);z-index:5;pointer-events:none;border-radius:2px;animation:scanPulse 1.2s ease-in-out infinite}
   @keyframes scanPulse{0%,100%{opacity:.7}50%{opacity:1}}
-  .scanner-status{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.7);color:#fff;font-size:.78rem;padding:5px 12px;border-radius:20px;z-index:6;white-space:nowrap}
-  .scanner-status.active{background:rgba(34,197,94,.85)}
-  .v-card{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:8px}
-  .v-swipe-wrap{position:relative;margin-bottom:8px;border-radius:12px;overflow:hidden;background:#991b1b;touch-action:pan-y}
+  .scanner-status{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);background:rgba(15,23,42,.75);color:#fff;font-size:.78rem;padding:5px 12px;border-radius:20px;z-index:6;white-space:nowrap}
+  .scanner-status.active{background:rgba(22,163,74,.9)}
+  .v-card{background:#f8fafc;border:1px solid var(--border);border-radius:14px;padding:12px 14px;margin-bottom:8px}
+  .v-swipe-wrap{position:relative;margin-bottom:8px;border-radius:14px;overflow:hidden;background:#fecaca;touch-action:pan-y}
   .v-swipe-actions{position:absolute;right:0;top:0;bottom:0;width:96px;display:flex;z-index:1}
-  .v-swipe-del{width:100%;border:none;background:#dc2626;color:#fff;font-weight:800;font-size:1rem;cursor:pointer;-webkit-tap-highlight-color:transparent}
-  .v-swipe-content{position:relative;z-index:2;background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:12px 14px;transition:transform .55s cubic-bezier(.22,.61,.36,1);will-change:transform;touch-action:pan-y;user-select:none;-webkit-user-select:none}
+  .v-swipe-del{width:100%;border:none;background:#e11d48;color:#fff;font-weight:800;font-size:1rem;cursor:pointer;-webkit-tap-highlight-color:transparent}
+  .v-swipe-content{position:relative;z-index:2;background:#fff;border:1px solid var(--border);border-radius:14px;padding:12px 14px;transition:transform .55s cubic-bezier(.22,.61,.36,1);will-change:transform;touch-action:pan-y;user-select:none;-webkit-user-select:none}
 
-  .v-bal{font-size:1.15rem;font-weight:700;color:#fbbf24}
+  .v-bal{font-size:1.15rem;font-weight:700;color:#d97706}
   .summary-row{display:flex;gap:8px;margin-bottom:12px}
-  .summary-box{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:12px;text-align:center}
+  .summary-box{flex:1;background:#fff;border:1px solid var(--border);border-radius:14px;padding:12px;text-align:center;box-shadow:0 2px 8px rgba(15,23,42,.04)}
   .summary-box .lbl{font-size:.75rem;color:var(--muted)}
   .summary-box .val{font-size:1.05rem;font-weight:700;margin-top:4px}
 
-  .backup-banner{background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.35);color:#fbbf24;padding:10px 12px;border-radius:12px;margin-bottom:12px;font-size:.85rem;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+  .backup-banner{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);color:#b45309;padding:10px 12px;border-radius:14px;margin-bottom:12px;font-size:.85rem;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
   .backup-banner button{flex-shrink:0}
-  .guide-box{background:var(--card);border:1px dashed var(--border);border-radius:14px;padding:20px 16px;text-align:center;margin:12px 0}
+  .guide-box{background:#fff;border:1px dashed var(--border);border-radius:16px;padding:20px 16px;text-align:center;margin:12px 0;box-shadow:0 2px 8px rgba(15,23,42,.03)}
   .guide-box h3{margin-bottom:8px;font-size:1rem}
   .guide-box p{color:var(--muted);font-size:.88rem;margin-bottom:12px;line-height:1.45}
   .manual-row{display:flex;gap:8px;margin-bottom:10px}
-  .manual-row input{flex:1;padding:12px 14px;border:1px solid var(--border);border-radius:12px;font-size:1rem;background:var(--card);color:var(--text);outline:none}
-  .low-stock-hint{font-size:.75rem;color:#facc15;margin-top:4px}
+  .manual-row input{flex:1;padding:12px 14px;border:1px solid var(--border);border-radius:12px;font-size:1rem;background:#fff;color:var(--text);outline:none;box-shadow:0 1px 3px rgba(15,23,42,.04)}
+  .manual-row input:focus{border-color:#93c5fd;box-shadow:0 0 0 3px rgba(59,130,246,.12)}
+  .low-stock-hint{font-size:.75rem;color:#b45309;margin-top:4px}
 
 </style>
 </head>
@@ -114,10 +125,10 @@
         <p>Offline · Hızlı Satış</p>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
-        <button type="button" onclick="openPhoto()" style="padding:0;border:1.5px solid #facc15;border-radius:12px;background:rgba(15,23,42,.55);cursor:pointer;line-height:0">
+        <button type="button" onclick="openPhoto()" style="padding:0;border:1.5px solid #3b82f6;border-radius:12px;background:#fff;cursor:pointer;line-height:0;box-shadow:0 2px 8px rgba(59,130,246,.15)">
           <img src="data:image/jpeg;base64,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" alt="" style="width:40px;height:40px;border-radius:10px;object-fit:cover;display:block">
         </button>
-        <div style="background:rgba(15,23,42,.55);border:1.5px solid #facc15;border-radius:10px;padding:8px 10px;color:#facc15;font-weight:800;font-size:.72rem;letter-spacing:.3px;white-space:nowrap">Mehmet DEVELİOĞLU</div>
+        <div style="background:linear-gradient(135deg,#eff6ff,#e0f2fe);border:1.5px solid #3b82f6;border-radius:10px;padding:8px 10px;color:#1d4ed8;font-weight:800;font-size:.72rem;letter-spacing:.3px;white-space:nowrap">Mehmet DEVELİOĞLU</div>
       </div>
     </div>
     <div class="tabs">
@@ -133,7 +144,7 @@
     <button onclick="openSales()">Satışlar</button>
     <button onclick="openVeresiye()">Veresiye</button>
     <button onclick="openToplam()">Toplam</button>
-    <button onclick="toggleDataMenu()" id="dataMenuBtn" style="color:#facc15 !important;font-size:1.7rem !important;font-weight:800;line-height:1;padding:4px 2px">♻️</button>
+    <button onclick="toggleDataMenu()" id="dataMenuBtn" style="color:#2563eb !important;font-size:1.7rem !important;font-weight:800;line-height:1;padding:4px 2px">♻️</button>
   </div>
   <div id="dataMenu" style="display:none;position:fixed;bottom:72px;right:16px;z-index:40;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:8px;box-shadow:0 8px 30px rgba(0,0,0,.4);min-width:150px">
     <button class="btn btn-secondary btn-block" style="margin-bottom:6px" onclick="exportExcel();hideDataMenu()">Excel İndir (6 sayfa)</button>
@@ -399,8 +410,8 @@
         c.innerHTML=`
           ${backupBannerHTML()}
           <div class="summary-row">
-            <div class="summary-box"><div class="lbl">Satış Toplamı</div><div class="val" style="color:#4ade80">${money(totalSales())}</div></div>
-            <div class="summary-box"><div class="lbl">Veresiye Bakiye</div><div class="val" style="color:#fbbf24">${money(totalVeresiye())}</div></div>
+            <div class="summary-box"><div class="lbl">Satış Toplamı</div><div class="val" style="color:#16a34a">${money(totalSales())}</div></div>
+            <div class="summary-box"><div class="lbl">Veresiye Bakiye</div><div class="val" style="color:#d97706">${money(totalVeresiye())}</div></div>
           </div>
           ${lowStock||zeroStock?`<div class="low-stock-hint">⚠ ${zeroStock?zeroStock+' üründe stok yok':''}${zeroStock&&lowStock?' · ':''}${lowStock?lowStock+' üründe stok az (≤5)':''}</div>`:''}
           <div class="scanner-wrap" id="listScannerWrap" style="height:260px;margin-bottom:10px">
@@ -426,7 +437,7 @@
             <div class="scanner-status" id="scanStatus">Kamera açılıyor...</div>
           </div>
           <div class="manual-row">
-            <input id="manualBarcode" type="text" inputmode="numeric" placeholder="Barkodu yazın veya yapıştırın" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();manualBarcodeSubmit();}">
+            <input id="manualBarcode" type="text" inputmode="text" placeholder="Barkod veya ürün adı yazın" autocomplete="off" enterkeyhint="done" onkeydown="if(event.key==='Enter'){event.preventDefault();manualBarcodeSubmit();}">
             <button class="btn btn-primary" type="button" onclick="manualBarcodeSubmit()">Ekle</button>
           </div>
           <div style="display:flex;gap:8px;margin-bottom:10px">
@@ -669,7 +680,7 @@
       let html=`<div class="sheet-handle"></div><h2>Veresiye <span style="display:flex;gap:6px">${undo}<button class="btn btn-secondary" style="padding:6px 12px" onclick="closeVeresiye()">Kapat</button></span></h2>
         <button class="btn btn-warn btn-block" style="margin-bottom:12px" onclick="openManualVeresiye()">+ Elle Borç Girişi</button>
         <div class="summary-row">
-          <div class="summary-box"><div class="lbl">Toplam Veresiye</div><div class="val" style="color:#fbbf24">${money(totalVeresiye())}</div></div>
+          <div class="summary-box"><div class="lbl">Toplam Veresiye</div><div class="val" style="color:#d97706">${money(totalVeresiye())}</div></div>
           <div class="summary-box"><div class="lbl">Kişi</div><div class="val">${veresiye.filter(v=>personBalance(v)>0).length}</div></div>
         </div>`;
       if(!veresiye.length){ html+=`<div class="empty">Veresiye kaydı yok</div>`; el.innerHTML=html; return; }
@@ -775,7 +786,7 @@
         <button class="btn btn-secondary btn-block" style="margin:10px 0" onclick="addEditVItem()">+ Ürün Ekle</button>
         <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:var(--bg);border-radius:10px;border:1px solid var(--border);margin-bottom:12px">
           <strong>Toplam</strong>
-          <strong id="editVTotal" style="color:#fbbf24;font-size:1.15rem">0,00 ₺</strong>
+          <strong id="editVTotal" style="color:#d97706;font-size:1.15rem">0,00 ₺</strong>
         </div>
         <button class="btn btn-primary btn-block" onclick="saveVeresiyeEntry()">Kaydet</button>
         <button class="btn btn-secondary btn-block" style="margin-top:8px" onclick="closeModal()">İptal</button>`;
@@ -1034,7 +1045,7 @@
         return `<div style="border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:12px;background:var(--bg)">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
             <div class="meta">${day} ${time}${e.paid?' · Ödendi':''}</div>
-            <strong id="petotal_${ei}" style="color:#fbbf24">${money(e.total||0)}</strong>
+            <strong id="petotal_${ei}" style="color:#d97706">${money(e.total||0)}</strong>
           </div>
           ${itemsHtml}
           <button class="btn btn-secondary" style="padding:4px 10px;font-size:.75rem;margin-top:4px" onclick="addPersonEntryItem(${ei})">+ Ürün Ekle</button>
@@ -1148,7 +1159,7 @@
       if(!salesHistory.length){
         el.innerHTML=`<div class="sheet-handle"></div><h2>Satışlar <span style="display:flex;gap:6px">${undo}<button class="btn btn-secondary" style="padding:6px 12px" onclick="closeSales()">Kapat</button></span></h2>
           ${manualBtn}
-          <div class="summary-box" style="margin-bottom:12px"><div class="lbl">Toplam Satış</div><div class="val" style="color:#4ade80">${money(0)}</div></div>
+          <div class="summary-box" style="margin-bottom:12px"><div class="lbl">Toplam Satış</div><div class="val" style="color:#16a34a">${money(0)}</div></div>
           <div class="empty">Henüz satış yok</div>`;
         return;
       }
@@ -1165,7 +1176,7 @@
       const monthNames=['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
       let html=`<div class="sheet-handle"></div><h2>Satışlar <span style="display:flex;gap:6px">${undo}<button class="btn btn-secondary" style="padding:6px 12px" onclick="closeSales()">Kapat</button></span></h2>
         ${manualBtn}
-        <div class="summary-box" style="margin-bottom:12px"><div class="lbl">Toplam Satış</div><div class="val" style="color:#4ade80">${money(totalSales())}</div></div>`;
+        <div class="summary-box" style="margin-bottom:12px"><div class="lbl">Toplam Satış</div><div class="val" style="color:#16a34a">${money(totalSales())}</div></div>`;
       Object.keys(groups).sort().reverse().forEach(mk=>{
         const [y,m]=mk.split('-');
         const mid='m_'+mk;
@@ -1173,13 +1184,13 @@
         Object.keys(groups[mk].days).forEach((day,di)=>{
           const did='d_'+mk+'_'+di;
           const dayTotal=groups[mk].days[day].reduce((s,x)=>s+x.total,0);
-          html+=`<div class="day-header" onclick="toggleBlock('${did}')"><span>▸ ${day}</span><span style="color:#60a5fa">${money(dayTotal)}</span></div><div id="${did}" style="display:none">`;
+          html+=`<div class="day-header" onclick="toggleBlock('${did}')"><span>▸ ${day}</span><span style="color:#2563eb">${money(dayTotal)}</span></div><div id="${did}" style="display:none">`;
           groups[mk].days[day].forEach(s=>{
             const time=new Date(s.date).toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});
             const items=(s.items||[]).map(it=>`<div style="display:flex;justify-content:space-between;font-size:.82rem;color:#334155"><span>${it.name} × ${it.qty}</span><span>${money(it.price*it.qty)}</span></div>`).join('');
             let tag='';
-            if(s.manual) tag=` <span style="color:#a78bfa;font-size:.75rem">(Elle giriş)</span>`;
-            else if(s.fromVeresiye) tag=` <span style="color:#fbbf24;font-size:.75rem">(Veresiye tahsilat${s.person?' · '+s.person:''})</span>`;
+            if(s.manual) tag=` <span style="color:#7c3aed;font-size:.75rem">(Elle giriş)</span>`;
+            else if(s.fromVeresiye) tag=` <span style="color:#d97706;font-size:.75rem">(Veresiye tahsilat${s.person?' · '+s.person:''})</span>`;
             html+=`<div class="sale-item">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
                 <span style="font-weight:600">${time}${tag}</span>
@@ -1223,7 +1234,7 @@
         <button class="btn btn-secondary btn-block" style="margin:10px 0" onclick="addEditSaleItem()">+ Ürün Ekle</button>
         <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:var(--bg);border-radius:10px;border:1px solid var(--border);margin-bottom:12px">
           <strong>Toplam</strong>
-          <strong id="editSaleTotal" style="color:#60a5fa;font-size:1.15rem">0,00 ₺</strong>
+          <strong id="editSaleTotal" style="color:#2563eb;font-size:1.15rem">0,00 ₺</strong>
         </div>
         <button class="btn btn-primary btn-block" onclick="saveEditedSale()">Kaydet</button>
         <button class="btn btn-secondary btn-block" style="margin-top:8px" onclick="closeModal()">İptal</button>`;
@@ -1782,6 +1793,78 @@
       if(st){ st.textContent='✓ '+(p.name||'Eklendi')+'  ·  SONRAKİ BARKOD'; st.classList.add('active'); }
     }
     function manualSales(){ const code=prompt('Barkodu girin:'); if(code) onBarcodeDetected(code.trim()); }
+    function findProductByBarcodeOrName(q){
+      const raw = String(q || '').trim();
+      if(!raw) return { product: null, matches: [] };
+      const normB = (b) => String(b || '').trim().replace(/^0+/, '') || '0';
+      const codeStr = raw.replace(/\s+/g, '');
+      // 1) Barkod tam eşleşme
+      let p = products.find(x => {
+        const pb = String(x.barcode || '').trim();
+        return pb && (pb === codeStr || pb === raw || normB(pb) === normB(codeStr));
+      });
+      if(p) return { product: p, matches: [p] };
+      // 2) Ürün adı: önce birebir, sonra içeren
+      const qLower = raw.toLocaleLowerCase('tr');
+      const exact = products.filter(x => normName(x.name).toLocaleLowerCase('tr') === qLower);
+      if(exact.length === 1) return { product: exact[0], matches: exact };
+      if(exact.length > 1) return { product: exact[0], matches: exact };
+      const partial = products.filter(x => (x.name || '').toLocaleLowerCase('tr').includes(qLower));
+      // En kısa isim genelde daha doğru eşleşme (örn. "su" → "Su" önce "Su Bardağı" değil)
+      partial.sort((a,b) => (a.name||'').length - (b.name||'').length);
+      if(partial.length === 1) return { product: partial[0], matches: partial };
+      if(partial.length > 1) return { product: null, matches: partial };
+      return { product: null, matches: [] };
+    }
+    function manualBarcodeSubmit(){
+      const el = document.getElementById('manualBarcode');
+      if(!el) return;
+      const q = String(el.value || '').trim();
+      if(!q){
+        toast('Barkod veya ürün adı yazın');
+        el.focus();
+        return;
+      }
+      const { product, matches } = findProductByBarcodeOrName(q);
+      if(product){
+        addCart(product);
+        el.value = '';
+        const st = document.getElementById('scanStatus');
+        if(st){ st.textContent = '✓ ' + (product.name || 'Eklendi') + '  ·  SONRAKİ'; st.classList.add('active'); }
+        try { el.focus(); } catch(e){}
+        return;
+      }
+      if(matches && matches.length > 1){
+        // Birden fazla eşleşme: ilk 5'ini göster, seçtir
+        stopLiveScanner();
+        const list = matches.slice(0, 8);
+        document.getElementById('modal').innerHTML = `
+          <h2>Ürün seç</h2>
+          <p style="font-size:.85rem;color:var(--muted);margin-bottom:12px">"${esc(q)}" için ${matches.length} sonuç</p>
+          ${list.map(p => {
+            const stok = Math.max(0, parseInt(p.stock,10)||0);
+            return `<button type="button" class="btn btn-secondary btn-block" style="margin-bottom:8px;justify-content:space-between;text-align:left"
+              onclick="addCart(products.find(x=>x.id==='${esc(p.id)}'));closeModal();var e=document.getElementById('manualBarcode');if(e){e.value='';e.focus();}">
+              <span><strong>${esc(p.name)}</strong><br><small style="color:var(--muted)">${esc(p.barcode||'Barkod yok')} · Stok ${stok}</small></span>
+              <span style="color:#2563eb;font-weight:700">${money(p.price)}</span>
+            </button>`;
+          }).join('')}
+          <button class="btn btn-secondary btn-block" style="margin-top:8px" onclick="closeModal()">İptal</button>`;
+        document.getElementById('modalBg').classList.add('show');
+        el.value = '';
+        return;
+      }
+      // Hiç bulunamadı — barkod gibi yeni ürün teklif et
+      const looksLikeBarcode = /^[0-9]{6,}$/.test(q.replace(/\s+/g,''));
+      if(looksLikeBarcode){
+        onBarcodeDetected(q.replace(/\s+/g,''));
+        el.value = '';
+        try { el.focus(); } catch(e){}
+        return;
+      }
+      toast('Ürün bulunamadı · İsmi veya barkodu kontrol edin');
+      el.focus();
+    }
     function addCart(p){
       // Stok her zaman sayı olarak kontrol edilsin
       const stok = Math.max(0, parseInt(p.stock, 10) || 0);
@@ -1814,7 +1897,7 @@
         if(st) st.textContent = code ? 'Barkod en az 8 hane olmalı' : '';
         return;
       }
-      if(st) st.innerHTML = '<span style="color:#fbbf24">⏳ İnternetten ürün adı aranıyor...</span>';
+      if(st) st.innerHTML = '<span style="color:#d97706">⏳ İnternetten ürün adı aranıyor...</span>';
       if(lookupAbort){ try{ lookupAbort.abort(); }catch(e){} }
       lookupAbort = new AbortController();
       const signal = lookupAbort.signal;
@@ -1831,7 +1914,7 @@
               nEl.value = name;
             }
           }
-          if(st) st.innerHTML = '<span style="color:#4ade80">✓ Bulundu: ' + String(name).replace(/</g,'') + '</span>';
+          if(st) st.innerHTML = '<span style="color:#16a34a">✓ Bulundu: ' + String(name).replace(/</g,'') + '</span>';
           toast('Ürün adı bulundu');
         } else {
           if(st) st.innerHTML = '<span style="color:#f87171">Bulunamadı — ismi elle yazın</span>';
@@ -1913,11 +1996,11 @@
       document.getElementById('modal').innerHTML=`
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
           <h2 style="margin:0">${pid?'Ürünü Düzenle':'Yeni Ürün'}</h2>
-          <button type="button" onclick="scanBarcodeForProduct()" style="background:rgba(250,204,21,.08);border:1.5px solid #facc15;border-radius:10px;color:#facc15;font-weight:800;font-size:1.15rem;padding:8px 14px;letter-spacing:.4px">Kamera</button>
+          <button type="button" onclick="scanBarcodeForProduct()" style="background:rgba(59,130,246,.08);border:1.5px solid #3b82f6;border-radius:10px;color:#2563eb;font-weight:800;font-size:1.15rem;padding:8px 14px;letter-spacing:.4px">Kamera</button>
         </div>
         <div id="productScanArea" style="display:none;margin-bottom:14px">
           <div id="productScanner" style="width:100%;height:260px;border-radius:14px;overflow:hidden;background:#000;position:relative"></div>
-          <div id="productScanStatus" style="text-align:center;font-size:.8rem;color:#facc15;margin-top:6px">Barkodu kameraya tutun</div>
+          <div id="productScanStatus" style="text-align:center;font-size:.8rem;color:#2563eb;margin-top:6px">Barkodu kameraya tutun</div>
           <button class="btn btn-secondary btn-block" style="margin-top:8px" onclick="stopProductScan()">İptal</button>
         </div>
         <div class="form-group"><label>Barkod</label>
@@ -2082,29 +2165,29 @@
         <h2>Toplam <button class="btn btn-secondary" style="padding:6px 12px" onclick="closeToplam()">Kapat</button></h2>
         <div class="v-card">
           <div class="meta">Bu Ay Satış Toplamı (${ayAdi})</div>
-          <div style="font-size:1.35rem;font-weight:700;color:#4ade80;margin-top:4px">${money(satis)}</div>
+          <div style="font-size:1.35rem;font-weight:700;color:#16a34a;margin-top:4px">${money(satis)}</div>
           <div class="meta" style="margin-top:4px">${buAySatisSayisi} satış kaydı</div>
         </div>
         <div class="v-card">
           <div class="meta">Veresiye Bakiye</div>
-          <div style="font-size:1.35rem;font-weight:700;color:#fbbf24;margin-top:4px">${money(veres)}</div>
+          <div style="font-size:1.35rem;font-weight:700;color:#d97706;margin-top:4px">${money(veres)}</div>
           <div class="meta" style="margin-top:4px">${kisi} kişide açık borç</div>
         </div>
         <div class="v-card">
           <div class="meta">Bu Ay Satış + Veresiye</div>
-          <div style="font-size:1.35rem;font-weight:700;color:#60a5fa;margin-top:4px">${money(satisVeresiye)}</div>
+          <div style="font-size:1.35rem;font-weight:700;color:#2563eb;margin-top:4px">${money(satisVeresiye)}</div>
         </div>
         <div class="v-card">
           <div class="meta">Eldeki Mal (Stok Değeri)</div>
-          <div style="font-size:1.35rem;font-weight:700;color:#a78bfa;margin-top:4px">${money(stokDeger)}</div>
+          <div style="font-size:1.35rem;font-weight:700;color:#7c3aed;margin-top:4px">${money(stokDeger)}</div>
           <div class="meta" style="margin-top:4px">${products.length} ürün · ${stokAdet} adet</div>
         </div>
         <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
           <div class="meta" style="text-align:center">Özet (Bu Ay)</div>
-          <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:.9rem"><span>Bu Ay Satış</span><strong style="color:#4ade80">${money(satis)}</strong></div>
-          <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:.9rem"><span>Veresiye</span><strong style="color:#fbbf24">${money(veres)}</strong></div>
-          <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:.9rem"><span>Eldeki Mal</span><strong style="color:#a78bfa">${money(stokDeger)}</strong></div>
-          <div style="display:flex;justify-content:space-between;margin-top:10px;font-size:1.05rem;padding-top:8px;border-top:1px solid var(--border)"><span>Bu Ay Genel (S+V)</span><strong style="color:#60a5fa">${money(satisVeresiye)}</strong></div>
+          <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:.9rem"><span>Bu Ay Satış</span><strong style="color:#16a34a">${money(satis)}</strong></div>
+          <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:.9rem"><span>Veresiye</span><strong style="color:#d97706">${money(veres)}</strong></div>
+          <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:.9rem"><span>Eldeki Mal</span><strong style="color:#7c3aed">${money(stokDeger)}</strong></div>
+          <div style="display:flex;justify-content:space-between;margin-top:10px;font-size:1.05rem;padding-top:8px;border-top:1px solid var(--border)"><span>Bu Ay Genel (S+V)</span><strong style="color:#2563eb">${money(satisVeresiye)}</strong></div>
           <div style="margin-top:12px;font-size:.8rem;color:var(--muted);text-align:center">${(function(){ const l=getLastBackup(); if(!l) return 'Yedek alınmamış — Excel ile yedekleyin'; const d=Math.floor((Date.now()-new Date(l).getTime())/86400000); return d<=0?'Son yedek: bugün':'Son yedek: '+d+' gün önce'; })()}</div>
           <div style="display:flex;gap:8px;margin-top:10px">
             <button class="btn btn-secondary" style="flex:1" onclick="exportExcel()">💾 Excel İndir</button>
