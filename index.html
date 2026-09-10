@@ -115,6 +115,30 @@
   .manual-row input:focus{border-color:#93c5fd;box-shadow:0 0 0 3px rgba(59,130,246,.12)}
   .low-stock-hint{font-size:.75rem;color:#b45309;margin-top:4px}
 
+  /* Satış ekranı: kamera sabit, sepet kaydırılabilir */
+  .sales-layout{
+    display:flex;
+    flex-direction:column;
+    height:calc(100vh - 140px);
+    max-height:calc(100dvh - 140px);
+    overflow:hidden;
+  }
+  .sales-layout .scanner-wrap{
+    flex-shrink:0;
+    margin-bottom:10px;
+  }
+  .sales-layout .manual-row,
+  .sales-layout .sales-actions{
+    flex-shrink:0;
+  }
+  .sales-cart-area{
+    flex:1;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    padding-bottom:12px;
+    min-height:0;
+  }
+
 </style>
 </head>
 <body>
@@ -431,21 +455,25 @@
         fab.style.display='none';
         c.innerHTML=`
           ${backupBannerHTML()}
-          <div class="scanner-wrap">
-            <div id="liveScanner"></div>
-            <div class="scan-line"></div>
-            <div class="scanner-status" id="scanStatus">Kamera açılıyor...</div>
-          </div>
-          <div class="manual-row">
-            <input id="manualBarcode" type="text" inputmode="text" placeholder="Barkod veya ürün adı yazın" autocomplete="off" enterkeyhint="done" onkeydown="if(event.key==='Enter'){event.preventDefault();manualBarcodeSubmit();}">
-            <button class="btn btn-primary" type="button" onclick="manualBarcodeSubmit()">Ekle</button>
-          </div>
-          <div style="display:flex;gap:8px;margin-bottom:10px">
-            <button class="btn btn-secondary btn-block" onclick="cart=[];updateCartUI()">Temizle</button>
-            <button class="btn btn-secondary" type="button" onclick="document.getElementById('manualBarcode')&&document.getElementById('manualBarcode').focus()">Manuel</button>
-          </div>
-          <div id="cart"></div>
-          <div id="cartExtra"></div>`;
+          <div class="sales-layout">
+            <div class="scanner-wrap">
+              <div id="liveScanner"></div>
+              <div class="scan-line"></div>
+              <div class="scanner-status" id="scanStatus">Kamera açılıyor...</div>
+            </div>
+            <div class="manual-row">
+              <input id="manualBarcode" type="text" inputmode="text" placeholder="Barkod veya ürün adı yazın" autocomplete="off" enterkeyhint="done" onkeydown="if(event.key==='Enter'){event.preventDefault();manualBarcodeSubmit();}">
+              <button class="btn btn-primary" type="button" onclick="manualBarcodeSubmit()">Ekle</button>
+            </div>
+            <div class="sales-actions" style="display:flex;gap:8px;margin-bottom:10px">
+              <button class="btn btn-secondary btn-block" onclick="cart=[];updateCartUI()">Temizle</button>
+              <button class="btn btn-secondary" type="button" onclick="document.getElementById('manualBarcode')&&document.getElementById('manualBarcode').focus()">Manuel</button>
+            </div>
+            <div class="sales-cart-area">
+              <div id="cart"></div>
+              <div id="cartExtra"></div>
+            </div>
+          </div>`;
         updateCartUI();
         startLiveScanner();
       }
